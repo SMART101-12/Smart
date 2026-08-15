@@ -6,51 +6,25 @@ $binRoot = Join-Path $installRoot 'bin'
 
 Write-Host '=== SMART local agent installer ===' -ForegroundColor Cyan
 
-# Prefer a real Python installation over Microsoft Store execution aliases.
-$pythonCandidates = @(
-    'C:\Users\' + $env:USERNAME + '\AppData\Local\Programs\Python\Python312\python.exe',
-    'C:\Users\' + $env:USERNAME + '\AppData\Local\Programs\Python\Python313\python.exe',
-    'C:\Program Files\Python312\python.exe',
-    'C:\Program Files\Python313\python.exe'
-)
-
-$python = $null
-foreach ($candidate in $pythonCandidates) {
-    if (Test-Path -LiteralPath $candidate) {
-        try {
-            $versionText = & $candidate --version 2>&1
-            if ($LASTEXITCODE -eq 0 -and $versionText -match 'Python 3\.(12|13)') {
-                $python = Get-Item -LiteralPath $candidate
-                break
-            }
-        } catch { }
-    }
-}
-
-# Fall back to PowerShell's command discovery. Do not invoke where.exe because
-# some Windows configurations block it with Access Denied.
-if (-not $python) {
-    $commandCandidates = @(Get-Command python.exe -All -ErrorAction SilentlyContinue)
-    foreach ($command in $commandCandidates) {
-        $candidate = $command.Source
-        if (-not $candidate -or $candidate -like '*WindowsApps*') { continue }
-        if (Test-Path -LiteralPath $candidate) {
-            try {
-                $versionText = & $candidate --version 2>&1
-                if ($LASTEXITCODE -eq 0 -and $versionText -match 'Python 3\.(12|13)') {
-                    $python = Get-Item -LiteralPath $candidate
-                    break
-                }
-            } catch { }
+# This Windows setup has a working `python` command even though direct
+# execution of the absolute python.exe path can be blocked. Prefer the
+# command resolver and invoke Python by command name.
+$pythonCommand = $null
+foreach ($name in @('python', 'py')) {
+    try {
+        if ($name -eq 'py') { $versionText = & py -3.12 --version 2>&1 } else { $versionText = & python --version 2>&1 }
+        if ($LASTEXITCODE -eq 0 -and $versionText -match 'Python 3\.(12|13)') {
+            $pythonCommand = $name
+            break
         }
-    }
+    } catch { }
 }
 
-if (-not $python) {
-    throw 'A working Python 3.12/3.13 installation was not found. Python may be installed but blocked by Windows permissions. Do not reinstall yet.'
+if (-not $pythonCommand) {
+    throw 'A working Python 3.12/3.13 command was not found. Verify `python --version` or `py --version` in PowerShell.'
 }
 
-Write-Host ("Using Python: " + $python.FullName) -ForegroundColor Green
+Write-Host ("Using Python command: " + $pythonCommand) -ForegroundColor Green
 
 if (Test-Path $appRoot) { Remove-Item $appRoot -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $appRoot, $binRoot | Out-Null
@@ -64,7 +38,7 @@ $venvPath = Join-Path $appRoot '.venv'
 $venvPython = Join-Path $venvPath 'Scripts\python.exe'
 
 Write-Host 'Creating SMART virtual environment...' -ForegroundColor Yellow
-& $python.FullName -m venv $venvPath
+if ($pythonCommand -eq 'py') { & py -3.12 -m venv $venvPath } else { & python -m venv $venvPath }
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $venvPython)) {
     throw "Python failed to create the SMART virtual environment. Exit code: $LASTEXITCODE"
 }
