@@ -6,25 +6,53 @@ $binRoot = Join-Path $installRoot 'bin'
 
 Write-Host '=== SMART local agent installer ===' -ForegroundColor Cyan
 
-$python = Get-Command python -ErrorAction SilentlyContinue
-if (-not $python) {
-    $py = Get-Command py -ErrorAction SilentlyContinue
-    if ($py) { $python = $py }
+function Test-Python($candidate) {
+    if (-not $candidate) { return $false }
+    try {
+        & $candidate --version *> $null
+        return ($LASTEXITCODE -eq 0)
+    } catch { return $false }
 }
-if (-not $python) {
-    $winget = Get-Command winget -ErrorAction SilentlyContinue
+
+$pythonExe = $null
+$cmdPython = Get-Command python.exe -ErrorAction SilentlyContinue
+if ($cmdPython -and (Test-Python $cmdPython.Source)) { $pythonExe = $cmdPython.Source }
+
+if (-not $pythonExe) {
+    $cmdPy = Get-Command py.exe -ErrorAction SilentlyContinue
+    if ($cmdPy -and (Test-Python $cmdPy.Source)) { $pythonExe = $cmdPy.Source }
+}
+
+if (-not $pythonExe) {
+    $candidates = @(
+        (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python313\python.exe'),
+        'C:\Program Files\Python312\python.exe',
+        'C:\Program Files\Python313\python.exe'
+    )
+    foreach ($candidate in $candidates) {
+        if ((Test-Path $candidate) -and (Test-Python $candidate)) {
+            $pythonExe = $candidate
+            break
+        }
+    }
+}
+
+if (-not $pythonExe) {
+    $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
     if (-not $winget) { throw 'Python is not installed and winget is unavailable. Install Python 3.12+ and run this installer again.' }
     Write-Host 'Python not found. Installing Python 3.12...' -ForegroundColor Yellow
-    winget install Python.Python.3.12 --accept-source-agreements --accept-package-agreements
+    & $winget.Source install Python.Python.3.12 --accept-source-agreements --accept-package-agreements
+    if ($LASTEXITCODE -ne 0) { throw "Python installation failed with exit code $LASTEXITCODE." }
     throw 'Python was installed. Close PowerShell, reopen it, and run this installer again.'
 }
+
+Write-Host "Using Python: $pythonExe" -ForegroundColor DarkGray
 
 if (Test-Path $appRoot) { Remove-Item $appRoot -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $appRoot, $binRoot | Out-Null
 
 # Copy the application source, but never copy a developer virtual environment.
-# Copying .venv can leave a locked python.exe inside the installed app and make
-# the subsequent venv creation fail with Access Denied.
 Get-ChildItem -LiteralPath $source -Force |
     Where-Object { $_.Name -notin @('.venv', '.git', '__pycache__') } |
     ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $appRoot -Recurse -Force }
@@ -33,7 +61,7 @@ $venvPath = Join-Path $appRoot '.venv'
 $venvPython = Join-Path $venvPath 'Scripts\python.exe'
 
 Write-Host 'Creating SMART virtual environment...' -ForegroundColor Yellow
-& $python.Source -m venv $venvPath
+& $pythonExe -m venv $venvPath
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $venvPython)) {
     throw "Python failed to create the SMART virtual environment. Exit code: $LASTEXITCODE"
 }
