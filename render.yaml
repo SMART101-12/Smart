@@ -22,8 +22,3 @@ services:
         sync: false
       - key: OPENAI_MODEL
         value: gpt-5.6
-      - key: MCP_PORT
-        fromService:
-          type: web
-          name: smart-mcp
-          property: port
