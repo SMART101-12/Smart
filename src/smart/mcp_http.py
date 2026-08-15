@@ -10,6 +10,6 @@ from .server import mcp
 if __name__ == "__main__":
     mcp.run(
         transport="streamable-http",
-        host=os.getenv("MCP_HOST", "0.0.0.0"),
-        port=int(os.getenv("MCP_PORT", "8001")),
+        host=os.getenv("HOST", "0.0.0.0"),
+        port=int(os.getenv("PORT", os.getenv("MCP_PORT", "8000"))),
     )
