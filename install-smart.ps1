@@ -16,19 +16,32 @@ if (-not $python) {
     if (-not $winget) { throw 'Python is not installed and winget is unavailable. Install Python 3.12+ and run this installer again.' }
     Write-Host 'Python not found. Installing Python 3.12...' -ForegroundColor Yellow
     winget install Python.Python.3.12 --accept-source-agreements --accept-package-agreements
-    $python = Get-Command python -ErrorAction SilentlyContinue
-    if (-not $python) { $python = Get-Command py -ErrorAction SilentlyContinue }
-    if (-not $python) { throw 'Python was installed but is not visible to this PowerShell session. Close PowerShell, reopen it, and run the installer again.' }
+    throw 'Python was installed. Close PowerShell, reopen it, and run this installer again.'
 }
 
 if (Test-Path $appRoot) { Remove-Item $appRoot -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $appRoot, $binRoot | Out-Null
-Copy-Item -Path (Join-Path $source '*') -Destination $appRoot -Recurse -Force
 
-$venvPython = Join-Path $appRoot '.venv\Scripts\python.exe'
-& $python.Source -m venv (Join-Path $appRoot '.venv')
+# Copy the application source, but never copy a developer virtual environment.
+# Copying .venv can leave a locked python.exe inside the installed app and make
+# the subsequent venv creation fail with Access Denied.
+Get-ChildItem -LiteralPath $source -Force |
+    Where-Object { $_.Name -notin @('.venv', '.git', '__pycache__') } |
+    ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $appRoot -Recurse -Force }
+
+$venvPath = Join-Path $appRoot '.venv'
+$venvPython = Join-Path $venvPath 'Scripts\python.exe'
+
+Write-Host 'Creating SMART virtual environment...' -ForegroundColor Yellow
+& $python.Source -m venv $venvPath
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $venvPython)) {
+    throw "Python failed to create the SMART virtual environment. Exit code: $LASTEXITCODE"
+}
+
 & $venvPython -m pip install --upgrade pip
+if ($LASTEXITCODE -ne 0) { throw 'pip upgrade failed.' }
 & $venvPython -m pip install -r (Join-Path $appRoot 'requirements-iran-agent.txt')
+if ($LASTEXITCODE -ne 0) { throw 'SMART dependency installation failed.' }
 
 $launcher = @"
 @echo off
@@ -38,14 +51,17 @@ set "PYTHONPATH=$appRoot\src"
 Set-Content -Path (Join-Path $binRoot 'smart.cmd') -Value $launcher -Encoding ASCII
 
 $userPath = [Environment]::GetEnvironmentVariable('Path','User')
+if (-not $userPath) { $userPath = '' }
 if (-not (($userPath -split ';') -contains $binRoot)) {
-    [Environment]::SetEnvironmentVariable('Path', (($userPath.TrimEnd(';') + ';' + $binRoot).Trim(';')), 'User')
+    $newPath = if ($userPath.Trim()) { $userPath.TrimEnd(';') + ';' + $binRoot } else { $binRoot }
+    [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
 }
 
 $env:PYTHONPATH = Join-Path $appRoot 'src'
 Write-Host ''
 Write-Host 'Now configuring GitHub access.' -ForegroundColor Cyan
 & $venvPython -m smart.setup_token
+if ($LASTEXITCODE -ne 0) { throw 'GitHub token setup failed.' }
 
 New-Item -ItemType Directory -Force -Path (Join-Path $appRoot 'runtime') | Out-Null
 
