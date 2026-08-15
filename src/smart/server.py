@@ -1,6 +1,7 @@
 """SMART MCP server.
 
-Exposes a small, read-only tool surface for ChatGPT/App integrations.
+Read-only tools for the first ChatGPT/App test. Live market data comes from
+isolated source adapters and is returned with source/error metadata.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from mcp.server.fastmcp import FastMCP
 from .ai import ask_model, healthcheck
 from .scanner import Candidate, initial_analysis
 from .sources import source_status
+from .tsetmc import live_initial_analysis
 
 mcp = FastMCP("SMART Market Intelligence")
 
@@ -26,25 +28,24 @@ def smart_health() -> dict[str, Any]:
 
 @mcp.tool()
 def scan_market(symbols: list[str] | None = None) -> dict[str, Any]:
-    """Run the first-pass SMART scanner.
+    """Run a live first-pass analysis from TSETMC for the requested symbols."""
+    symbols = symbols or ["شلرد", "پالایش", "عیار"]
+    import asyncio
+    return asyncio.run(live_initial_analysis(symbols))
 
-    This MVP accepts normalized candidates and is intentionally conservative:
-    it never claims that a trade is executable without live-source validation.
-    """
+
+@mcp.tool()
+def scan_smoke(symbols: list[str] | None = None) -> dict[str, Any]:
+    """Run deterministic scanner smoke test without external market data."""
     symbols = symbols or ["SHLDR", "PALAYESH", "AYAR"]
-    candidates = [
-        Candidate(symbol=s, data_quality_score=50.0)
-        for s in symbols
-    ]
+    candidates = [Candidate(symbol=s, data_quality_score=50.0) for s in symbols]
     return initial_analysis(candidates)
 
 
 @mcp.tool()
 async def source_check(url: str, name: str = "custom") -> dict[str, Any]:
-    """Register/check a web source endpoint without treating it as trusted."""
-    # Connectivity is deliberately not performed here yet; deployment will
-    # supply an HTTP egress policy and source-specific adapters.
-    return source_status(name, url=url, available=False, detail="adapter pending")
+    """Describe a web source without treating it as trusted market data."""
+    return source_status(name, url=url, available=False, detail="use a source adapter for production ingestion")
 
 
 @mcp.tool()
