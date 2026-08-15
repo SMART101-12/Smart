@@ -6,30 +6,26 @@ $binRoot = Join-Path $installRoot 'bin'
 
 Write-Host '=== SMART local agent installer ===' -ForegroundColor Cyan
 
-# This Windows setup has a working `python` command even though direct
-# execution of the absolute python.exe path can be blocked. Prefer the
-# command resolver and invoke Python by command name.
-$pythonCommand = $null
-foreach ($name in @('python', 'py')) {
-    try {
-        if ($name -eq 'py') { $versionText = & py -3.12 --version 2>&1 } else { $versionText = & python --version 2>&1 }
-        if ($LASTEXITCODE -eq 0 -and $versionText -match 'Python 3\.(12|13)') {
-            $pythonCommand = $name
-            break
-        }
-    } catch { }
+# The machine has already verified a working Python command. Avoid where.exe,
+# absolute python.exe paths, winget, and fragile exit-code detection.
+$pythonCommand = 'python'
+$versionText = (& python --version 2>&1 | Out-String).Trim()
+if ($versionText -notmatch 'Python 3\.(12|13)') {
+    $pyVersion = (& py --version 2>&1 | Out-String).Trim()
+    if ($pyVersion -match 'Python 3\.(12|13)') {
+        $pythonCommand = 'py'
+        $versionText = $pyVersion
+    } else {
+        throw "Python 3.12/3.13 was not detected. python reported: $versionText"
+    }
 }
 
-if (-not $pythonCommand) {
-    throw 'A working Python 3.12/3.13 command was not found. Verify `python --version` or `py --version` in PowerShell.'
-}
-
-Write-Host ("Using Python command: " + $pythonCommand) -ForegroundColor Green
+Write-Host ("Using Python command: " + $pythonCommand + " (" + $versionText + ")") -ForegroundColor Green
 
 if (Test-Path $appRoot) { Remove-Item $appRoot -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $appRoot, $binRoot | Out-Null
 
-# Copy the application source, but never copy a developer virtual environment.
+# Copy application source, excluding local developer environments and Git data.
 Get-ChildItem -LiteralPath $source -Force |
     Where-Object { $_.Name -notin @('.venv', '.git', '__pycache__') } |
     ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $appRoot -Recurse -Force }
@@ -43,6 +39,7 @@ if ($LASTEXITCODE -ne 0 -or -not (Test-Path $venvPython)) {
     throw "Python failed to create the SMART virtual environment. Exit code: $LASTEXITCODE"
 }
 
+Write-Host 'Installing SMART dependencies...' -ForegroundColor Yellow
 & $venvPython -m pip install --upgrade pip
 if ($LASTEXITCODE -ne 0) { throw 'pip upgrade failed.' }
 & $venvPython -m pip install -r (Join-Path $appRoot 'requirements-iran-agent.txt')
