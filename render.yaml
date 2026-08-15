@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: smart-market-intelligence
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5.6
