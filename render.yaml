@@ -3,9 +3,27 @@ services:
     name: smart-market-intelligence
     runtime: docker
     dockerfilePath: ./Dockerfile
+    dockerCommand: uvicorn smart.webapp:app --host 0.0.0.0 --port $PORT
     plan: free
     envVars:
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_MODEL
         value: gpt-5.6
+
+  - type: web
+    name: smart-mcp
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: python -m smart.mcp_http
+    plan: free
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5.6
+      - key: MCP_PORT
+        fromService:
+          type: web
+          name: smart-mcp
+          property: port
