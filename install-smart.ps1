@@ -27,11 +27,13 @@ foreach ($candidate in $pythonCandidates) {
     }
 }
 
-# Fall back to PATH only after checking the known real-installation locations.
+# Fall back to PowerShell's command discovery. Do not invoke where.exe because
+# some Windows configurations block it with Access Denied.
 if (-not $python) {
-    $wherePython = @(where.exe python 2>$null)
-    foreach ($candidate in $wherePython) {
-        if ($candidate -like '*WindowsApps*') { continue }
+    $commandCandidates = @(Get-Command python.exe -All -ErrorAction SilentlyContinue)
+    foreach ($command in $commandCandidates) {
+        $candidate = $command.Source
+        if (-not $candidate -or $candidate -like '*WindowsApps*') { continue }
         if (Test-Path -LiteralPath $candidate) {
             try {
                 $versionText = & $candidate --version 2>&1
@@ -45,7 +47,7 @@ if (-not $python) {
 }
 
 if (-not $python) {
-    throw 'A working Python 3.12/3.13 installation was not found. Python may be installed but blocked by Windows permissions or an execution policy. Do not reinstall yet; run: where.exe python'
+    throw 'A working Python 3.12/3.13 installation was not found. Python may be installed but blocked by Windows permissions. Do not reinstall yet.'
 }
 
 Write-Host ("Using Python: " + $python.FullName) -ForegroundColor Green
