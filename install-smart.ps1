@@ -6,7 +6,6 @@ $binRoot = Join-Path $installRoot 'bin'
 
 Write-Host '=== SMART local agent installer ===' -ForegroundColor Cyan
 
-# Find Python 3.11+ without requiring Git.
 $python = Get-Command python -ErrorAction SilentlyContinue
 if (-not $python) {
     $py = Get-Command py -ErrorAction SilentlyContinue
@@ -31,7 +30,6 @@ $venvPython = Join-Path $appRoot '.venv\Scripts\python.exe'
 & $venvPython -m pip install --upgrade pip
 & $venvPython -m pip install -r (Join-Path $appRoot 'requirements-iran-agent.txt')
 
-# Launcher: `smart start|stop|status|once`
 $launcher = @"
 @echo off
 set "PYTHONPATH=$appRoot\src"
@@ -39,7 +37,6 @@ set "PYTHONPATH=$appRoot\src"
 "@
 Set-Content -Path (Join-Path $binRoot 'smart.cmd') -Value $launcher -Encoding ASCII
 
-# Add launcher directory to the current user's PATH.
 $userPath = [Environment]::GetEnvironmentVariable('Path','User')
 if (-not (($userPath -split ';') -contains $binRoot)) {
     [Environment]::SetEnvironmentVariable('Path', (($userPath.TrimEnd(';') + ';' + $binRoot).Trim(';')), 'User')
@@ -51,10 +48,6 @@ Write-Host 'Now configuring GitHub access.' -ForegroundColor Cyan
 & $venvPython -m smart.setup_token
 
 New-Item -ItemType Directory -Force -Path (Join-Path $appRoot 'runtime') | Out-Null
-$commandFile = Join-Path $appRoot 'runtime\command.json'
-if (-not (Test-Path $commandFile)) {
-    '{"request_id":"bootstrap","action":"noop"}' | Set-Content $commandFile -Encoding UTF8
-}
 
 Write-Host ''
 Write-Host 'SMART installation complete.' -ForegroundColor Green
