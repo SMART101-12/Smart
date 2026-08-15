@@ -1,18 +1,17 @@
 """Safe GitHub command bridge for the local SMART Iran agent.
 
-The local process polls a single command JSON file in the public/private
-repository. Only allow-listed market-data actions are executable; arbitrary
-shell commands are never accepted. Results are written back through the
-GitHub Contents API.
+The local process polls a single command JSON file. Only allow-listed market
+-data actions are executable; arbitrary shell commands are never accepted.
+Every completed request writes a result and a compact persistent snapshot to
+GitHub, while the full raw payload remains in the local SQLite store.
 """
-
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 import os
 import time
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 
@@ -30,8 +29,15 @@ API = "https://api.github.com"
 
 def token() -> str:
     value = os.getenv("SMART_GITHUB_TOKEN")
+    if value:
+        return value
+    try:
+        import keyring
+        value = keyring.get_password("SMART-GitHub", "github-token")
+    except Exception:
+        value = None
     if not value:
-        raise RuntimeError("SMART_GITHUB_TOKEN is not set")
+        raise RuntimeError("GitHub token is not configured. Run the SMART installer/setup once.")
     return value
 
 
@@ -50,9 +56,13 @@ def get_file(path: str) -> tuple[dict[str, Any] | None, str | None]:
     return json.loads(content), body["sha"]
 
 
-def put_file(path: str, payload: dict[str, Any], message: str, sha: str | None = None) -> None:
+def put_json(path: str, payload: dict[str, Any], message: str, sha: str | None = None) -> None:
     url = f"{API}/repos/{REPO}/contents/{path}"
-    body: dict[str, Any] = {"message": message, "content": base64.b64encode(json.dumps(payload, ensure_ascii=False, indent=2).encode()).decode(), "branch": BRANCH}
+    body: dict[str, Any] = {
+        "message": message,
+        "content": base64.b64encode(json.dumps(payload, ensure_ascii=False, indent=2).encode()).decode(),
+        "branch": BRANCH,
+    }
     if sha:
         body["sha"] = sha
     r = requests.put(url, headers=headers(), json=body, timeout=20)
@@ -77,6 +87,27 @@ def execute(command: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _compact_snapshot(result: dict[str, Any]) -> dict[str, Any]:
+    data = result.get("data", {})
+    payload = data.get("payload", {})
+    history = payload.get("daily_history", [])
+    latest = history[0] if history else None
+    oldest = history[-1] if history else None
+    return {
+        "request_id": result.get("request_id"),
+        "symbol": result.get("symbol"),
+        "source": data.get("source"),
+        "observed_at": data.get("observed_at"),
+        "ins_code": data.get("ins_code"),
+        "history_rows": len(history),
+        "latest_history": latest,
+        "oldest_history": oldest,
+        "closing_price": payload.get("closing_price"),
+        "client_type": payload.get("client_type"),
+        "instrument": payload.get("instrument"),
+    }
+
+
 def run_once(last_request_id: str | None = None) -> str | None:
     command, command_sha = get_file(COMMAND_PATH)
     if not command or not command.get("request_id") or command.get("request_id") == last_request_id:
@@ -92,7 +123,9 @@ def run_once(last_request_id: str | None = None) -> str | None:
             "error": type(exc).__name__ + ": " + str(exc),
         }
     result["command_sha"] = command_sha
-    put_file(RESULT_PATH, result, f"agent: result for {request_id}")
+    put_json(RESULT_PATH, result, f"agent: result for {request_id}")
+    if result.get("status") == "success":
+        put_json(f"runtime/snapshots/{result['symbol']}/{request_id}.json", _compact_snapshot(result), f"agent: snapshot {result['symbol']} {request_id}")
     return request_id
 
 
