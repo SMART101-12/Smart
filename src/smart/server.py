@@ -27,11 +27,10 @@ def smart_health() -> dict[str, Any]:
 
 
 @mcp.tool()
-def scan_market(symbols: list[str] | None = None) -> dict[str, Any]:
+async def scan_market(symbols: list[str] | None = None) -> dict[str, Any]:
     """Run a live first-pass analysis from TSETMC for the requested symbols."""
     symbols = symbols or ["شلرد", "پالایش", "عیار"]
-    import asyncio
-    return asyncio.run(live_initial_analysis(symbols))
+    return await live_initial_analysis(symbols)
 
 
 @mcp.tool()
