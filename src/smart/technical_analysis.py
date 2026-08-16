@@ -1,181 +1,323 @@
 from __future__ import annotations
 
-"""Historical technical analysis using TSETMC daily history only.
-
-No web-search price source is used. Signals are evaluated without look-ahead:
-the signal is formed from data available through day t and the return is measured
-over subsequent trading rows.
-"""
-
 import argparse
 import csv
 import json
-import math
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
-
-from .tsetmc_adapter import TsetmcAdapter
-
-ROOT = Path(__file__).resolve().parents[2]
-OUT = ROOT / "runtime" / "analysis"
 
 
-def _num(row: dict[str, Any], *keys: str) -> float | None:
+@dataclass(frozen=True)
+class Bar:
+    date: str
+    close: float
+    high: float
+    low: float
+    open: float
+    volume: float
+    value: float
+    trades: float
+
+
+@dataclass
+class Feature:
+    date: str
+    close: float
+    return_1d: float | None
+    sma5: float | None
+    sma20: float | None
+    sma50: float | None
+    ema12: float | None
+    ema26: float | None
+    rsi14: float | None
+    macd: float | None
+    macd_signal: float | None
+    atr14: float | None
+    volume_ratio20: float | None
+    roc20: float | None
+    drawdown_60: float | None
+    breakout_up20: bool
+    breakout_down20: bool
+    composite_score: int
+    prediction: str
+    future_return_5d: float | None
+    prediction_correct: bool | None
+
+
+def _num(row: dict, *keys: str) -> float:
     for key in keys:
         value = row.get(key)
+        if value in (None, "", "-"):
+            continue
         try:
-            if value is not None and value != "":
-                return float(value)
-        except (TypeError, ValueError):
-            pass
-    return None
+            return float(str(value).replace(",", ""))
+        except ValueError:
+            continue
+    return 0.0
 
 
-def _date(row: dict[str, Any]) -> str:
-    return str(row.get("dEven", ""))
+def load_bars(history_root: Path, symbol: str) -> list[Bar]:
+    root = history_root / symbol
+    rows: dict[str, dict] = {}
+    if root.exists():
+        for path in sorted(root.glob("*.json")):
+            if len(path.stem) != 6 or not path.stem.isdigit():
+                continue
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            for row in payload.get("daily_history", []):
+                date = str(row.get("dEven", ""))
+                if len(date) == 8 and date.isdigit():
+                    rows[date] = row
+    flat = history_root / f"{symbol}.json"
+    if flat.exists():
+        payload = json.loads(flat.read_text(encoding="utf-8"))
+        for row in payload.get("daily_history", []):
+            date = str(row.get("dEven", ""))
+            if len(date) == 8 and date.isdigit():
+                rows.setdefault(date, row)
+    bars: list[Bar] = []
+    for date in sorted(rows):
+        row = rows[date]
+        close = _num(row, "pClosing", "pDrCotVal")
+        if close <= 0:
+            continue
+        bars.append(
+            Bar(
+                date=date,
+                close=close,
+                high=_num(row, "pMax", "pClosing", "pDrCotVal"),
+                low=_num(row, "pMin", "pClosing", "pDrCotVal"),
+                open=_num(row, "pFirst", "pClosing", "pDrCotVal"),
+                volume=_num(row, "qTotTran5J"),
+                value=_num(row, "qTotCap"),
+                trades=_num(row, "zTotTran"),
+            )
+        )
+    if not bars:
+        raise RuntimeError(f"No usable TSETMC history found for {symbol}")
+    return bars
 
 
-def _sma(values: list[float | None], n: int, i: int) -> float | None:
-    if i + 1 < n: return None
-    x = values[i + 1 - n:i + 1]
-    if any(v is None for v in x): return None
-    return sum(x) / n
-
-
-def _ema(values: list[float | None], n: int) -> list[float | None]:
-    out: list[float | None] = [None] * len(values)
-    valid = [i for i, v in enumerate(values) if v is not None]
-    if len(valid) < n: return out
-    start = valid[n - 1]
-    seed = sum(values[i] for i in valid[:n]) / n
-    out[start] = seed
-    alpha = 2 / (n + 1)
-    for i in range(start + 1, len(values)):
-        if values[i] is None or out[i - 1] is None: continue
-        out[i] = alpha * values[i] + (1 - alpha) * out[i - 1]
+def sma(values: list[float], period: int) -> list[float | None]:
+    out = [None] * len(values)
+    total = 0.0
+    for i, value in enumerate(values):
+        total += value
+        if i >= period:
+            total -= values[i - period]
+        if i >= period - 1:
+            out[i] = total / period
     return out
 
 
-def _rsi(close: list[float | None], n: int = 14) -> list[float | None]:
-    out: list[float | None] = [None] * len(close)
-    gains: list[float] = []; losses: list[float] = []
-    for i in range(1, len(close)):
-        if close[i] is None or close[i - 1] is None: continue
-        change = close[i] - close[i - 1]
-        gains.append(max(change, 0)); losses.append(max(-change, 0))
-        if len(gains) >= n:
-            if len(gains) == n:
-                ag, al = sum(gains) / n, sum(losses) / n
-            else:
-                ag = (ag * (n - 1) + gains[-1]) / n
-                al = (al * (n - 1) + losses[-1]) / n
-            out[i] = 100 if al == 0 else 100 - 100 / (1 + ag / al)
+def ema(values: list[float | None], period: int) -> list[float | None]:
+    out = [None] * len(values)
+    clean = [(i, v) for i, v in enumerate(values) if v is not None]
+    if len(clean) < period:
+        return out
+    seed_i = clean[period - 1][0]
+    previous = sum(v for _, v in clean[:period]) / period
+    out[seed_i] = previous
+    alpha = 2.0 / (period + 1.0)
+    for i, value in clean[period:]:
+        previous = alpha * value + (1.0 - alpha) * previous
+        out[i] = previous
     return out
 
 
-def _atr(rows: list[dict[str, Any]], n: int = 14) -> list[float | None]:
-    tr: list[float | None] = []
-    for i, r in enumerate(rows):
-        h, l, cprev = _num(r, "pMax", "maxPrice"), _num(r, "pMin", "minPrice"), _num(rows[i - 1], "pClosing", "close") if i else None
-        if h is None or l is None: tr.append(None); continue
-        tr.append(max(h - l, abs(h - cprev), abs(l - cprev)) if cprev is not None else h - l)
-    return [_sma(tr, n, i) for i in range(len(rows))]
-
-
-def enrich(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    rows = sorted(rows, key=lambda r: int(_date(r) or 0))
-    close = [_num(r, "pClosing", "close", "closingPrice") for r in rows]
-    high = [_num(r, "pMax", "maxPrice") for r in rows]
-    low = [_num(r, "pMin", "minPrice") for r in rows]
-    volume = [_num(r, "qTotTran5J", "volume") for r in rows]
-    ema12, ema26 = _ema(close, 12), _ema(close, 26)
-    macd_raw = [a - b if a is not None and b is not None else None for a, b in zip(ema12, ema26)]
-    macd_signal = _ema(macd_raw, 9)
-    rsi = _rsi(close); atr = _atr(rows)
-    out = []
-    for i, r in enumerate(rows):
-        item = dict(r)
-        item.update({
-            "sma20": _sma(close, 20, i), "sma50": _sma(close, 50, i), "sma200": _sma(close, 200, i),
-            "ema12": ema12[i], "ema26": ema26[i], "macd": macd_raw[i], "macd_signal": macd_signal[i],
-            "rsi14": rsi[i], "atr14": atr[i], "volume_sma20": _sma(volume, 20, i),
-        })
-        c = close[i]
-        v = volume[i]
-        signals: list[str] = []
-        if c is not None and item["sma20"] is not None and item["sma50"] is not None:
-            if c > item["sma20"] > item["sma50"]: signals.append("trend_up")
-            if c < item["sma20"] < item["sma50"]: signals.append("trend_down")
-        if rsi[i] is not None:
-            if rsi[i] < 30: signals.append("rsi_oversold")
-            elif rsi[i] > 70: signals.append("rsi_overbought")
-        if macd_raw[i] is not None and macd_signal[i] is not None:
-            if macd_raw[i] > macd_signal[i]: signals.append("macd_bullish")
-            elif macd_raw[i] < macd_signal[i]: signals.append("macd_bearish")
-        if v is not None and item["volume_sma20"] not in (None, 0) and v >= 2 * item["volume_sma20"]: signals.append("volume_spike")
-        item["signals"] = signals
-        out.append(item)
+def rsi(values: list[float], period: int = 14) -> list[float | None]:
+    out = [None] * len(values)
+    if len(values) <= period:
+        return out
+    gains = [0.0] * len(values)
+    losses = [0.0] * len(values)
+    for i in range(1, len(values)):
+        delta = values[i] - values[i - 1]
+        gains[i] = max(delta, 0.0)
+        losses[i] = max(-delta, 0.0)
+    avg_gain = sum(gains[1 : period + 1]) / period
+    avg_loss = sum(losses[1 : period + 1]) / period
+    out[period] = 100.0 if avg_loss == 0 else 100.0 - 100.0 / (1.0 + avg_gain / avg_loss)
+    for i in range(period + 1, len(values)):
+        avg_gain = ((avg_gain * (period - 1)) + gains[i]) / period
+        avg_loss = ((avg_loss * (period - 1)) + losses[i]) / period
+        out[i] = 100.0 if avg_loss == 0 else 100.0 - 100.0 / (1.0 + avg_gain / avg_loss)
     return out
 
 
-def backtest(rows: list[dict[str, Any]], horizon: int = 5) -> dict[str, Any]:
-    close = [_num(r, "pClosing", "close", "closingPrice") for r in rows]
-    rules = {
-        "trend_up": lambda r: "trend_up" in r["signals"],
-        "rsi_oversold": lambda r: "rsi_oversold" in r["signals"],
-        "macd_bullish": lambda r: "macd_bullish" in r["signals"],
-        "volume_spike": lambda r: "volume_spike" in r["signals"],
-        "trend_down": lambda r: "trend_down" in r["signals"],
-        "rsi_overbought": lambda r: "rsi_overbought" in r["signals"],
-        "macd_bearish": lambda r: "macd_bearish" in r["signals"],
+def atr(bars: list[Bar], period: int = 14) -> list[float | None]:
+    tr = [0.0] * len(bars)
+    for i, bar in enumerate(bars):
+        if i == 0:
+            tr[i] = max(bar.high - bar.low, 0.0)
+        else:
+            tr[i] = max(bar.high - bar.low, abs(bar.high - bars[i - 1].close), abs(bar.low - bars[i - 1].close))
+    out = [None] * len(bars)
+    if len(bars) < period:
+        return out
+    value = sum(tr[:period]) / period
+    out[period - 1] = value
+    for i in range(period, len(bars)):
+        value = ((value * (period - 1)) + tr[i]) / period
+        out[i] = value
+    return out
+
+
+def _rolling_max(values: list[float], period: int, index: int) -> float | None:
+    return None if index < period else max(values[index - period : index])
+
+
+def _rolling_min(values: list[float], period: int, index: int) -> float | None:
+    return None if index < period else min(values[index - period : index])
+
+
+def build_features(bars: list[Bar], horizon: int = 5) -> list[Feature]:
+    closes = [b.close for b in bars]
+    volumes = [b.volume for b in bars]
+    sma5, sma20, sma50 = sma(closes, 5), sma(closes, 20), sma(closes, 50)
+    ema12, ema26 = ema(closes, 12), ema(closes, 26)
+    rsi14 = rsi(closes, 14)
+    macd = [None if ema12[i] is None or ema26[i] is None else ema12[i] - ema26[i] for i in range(len(bars))]
+    macd_signal = ema(macd, 9)
+    atr14 = atr(bars, 14)
+    volume_avg20 = sma(volumes, 20)
+    features: list[Feature] = []
+    for i, bar in enumerate(bars):
+        return_1d = None if i == 0 else bar.close / bars[i - 1].close - 1.0
+        vr = None if volume_avg20[i] in (None, 0) else bar.volume / volume_avg20[i]
+        roc20 = None if i < 20 else bar.close / bars[i - 20].close - 1.0
+        peak = max(closes[max(0, i - 59) : i + 1])
+        drawdown = None if peak == 0 else bar.close / peak - 1.0
+        prior_high = _rolling_max(closes, 20, i)
+        prior_low = _rolling_min(closes, 20, i)
+        breakout_up = prior_high is not None and bar.close > prior_high
+        breakout_down = prior_low is not None and bar.close < prior_low
+        score = 0
+        if sma20[i] is not None:
+            score += 1 if bar.close > sma20[i] else -1
+        if sma50[i] is not None:
+            score += 1 if bar.close > sma50[i] else -1
+        if ema12[i] is not None and ema26[i] is not None:
+            score += 1 if ema12[i] > ema26[i] else -1
+        if macd[i] is not None and macd_signal[i] is not None:
+            score += 1 if macd[i] > macd_signal[i] else -1
+        if rsi14[i] is not None:
+            if rsi14[i] < 30:
+                score += 1
+            elif rsi14[i] > 70:
+                score -= 1
+        if breakout_up:
+            score += 1
+        elif breakout_down:
+            score -= 1
+        if vr is not None and vr >= 1.5 and return_1d is not None:
+            score += 1 if return_1d > 0 else -1
+        prediction = "UP" if score >= 2 else "DOWN" if score <= -2 else "NEUTRAL"
+        future = None if i + horizon >= len(bars) else bars[i + horizon].close / bar.close - 1.0
+        correct = None
+        if prediction != "NEUTRAL" and future is not None:
+            correct = (prediction == "UP" and future > 0) or (prediction == "DOWN" and future < 0)
+        features.append(Feature(
+            date=bar.date, close=bar.close, return_1d=return_1d, sma5=sma5[i], sma20=sma20[i], sma50=sma50[i],
+            ema12=ema12[i], ema26=ema26[i], rsi14=rsi14[i], macd=macd[i], macd_signal=macd_signal[i],
+            atr14=atr14[i], volume_ratio20=vr, roc20=roc20, drawdown_60=drawdown,
+            breakout_up20=breakout_up, breakout_down20=breakout_down, composite_score=score,
+            prediction=prediction, future_return_5d=future, prediction_correct=correct,
+        ))
+    return features
+
+
+def _indicator_accuracy(features: list[Feature], name: str) -> dict:
+    cases: list[bool] = []
+    for f in features:
+        if f.future_return_5d is None:
+            continue
+        signal: int | None = None
+        if name == "SMA20" and f.sma20 is not None:
+            signal = 1 if f.close > f.sma20 else -1
+        elif name == "SMA50" and f.sma50 is not None:
+            signal = 1 if f.close > f.sma50 else -1
+        elif name == "EMA12_26" and f.ema12 is not None and f.ema26 is not None:
+            signal = 1 if f.ema12 > f.ema26 else -1
+        elif name == "MACD" and f.macd is not None and f.macd_signal is not None:
+            signal = 1 if f.macd > f.macd_signal else -1
+        elif name == "RSI" and f.rsi14 is not None:
+            signal = 1 if f.rsi14 < 30 else -1 if f.rsi14 > 70 else None
+        elif name == "BREAKOUT20":
+            signal = 1 if f.breakout_up20 else -1 if f.breakout_down20 else None
+        elif name == "VOLUME_SPIKE" and f.volume_ratio20 is not None and f.volume_ratio20 >= 1.5:
+            signal = 1 if (f.return_1d or 0) > 0 else -1 if (f.return_1d or 0) < 0 else None
+        if signal is None:
+            continue
+        outcome = 1 if f.future_return_5d > 0 else -1 if f.future_return_5d < 0 else 0
+        if outcome:
+            cases.append(signal == outcome)
+    return {"indicator": name, "signals": len(cases), "correct": sum(cases), "accuracy": round(sum(cases) / len(cases), 4) if cases else None}
+
+
+def sensitive_points(features: list[Feature]) -> list[dict]:
+    events: list[dict] = []
+    for i, f in enumerate(features):
+        if i > 0:
+            p = features[i - 1]
+            if all(x is not None for x in (p.sma20, p.sma50, f.sma20, f.sma50)):
+                if p.sma20 <= p.sma50 and f.sma20 > f.sma50:
+                    events.append({"date": f.date, "type": "GOLDEN_CROSS", "close": f.close})
+                elif p.sma20 >= p.sma50 and f.sma20 < f.sma50:
+                    events.append({"date": f.date, "type": "DEATH_CROSS", "close": f.close})
+        if f.rsi14 is not None and f.rsi14 < 30:
+            events.append({"date": f.date, "type": "RSI_OVERSOLD", "close": f.close, "rsi14": round(f.rsi14, 2)})
+        elif f.rsi14 is not None and f.rsi14 > 70:
+            events.append({"date": f.date, "type": "RSI_OVERBOUGHT", "close": f.close, "rsi14": round(f.rsi14, 2)})
+        if f.volume_ratio20 is not None and f.volume_ratio20 >= 2:
+            events.append({"date": f.date, "type": "VOLUME_SPIKE_2X", "close": f.close, "volume_ratio20": round(f.volume_ratio20, 2)})
+        if f.breakout_up20:
+            events.append({"date": f.date, "type": "BREAKOUT_UP_20D", "close": f.close})
+        elif f.breakout_down20:
+            events.append({"date": f.date, "type": "BREAKOUT_DOWN_20D", "close": f.close})
+        if f.drawdown_60 is not None and f.drawdown_60 <= -0.15:
+            events.append({"date": f.date, "type": "DRAWDOWN_15PCT_60D", "close": f.close, "drawdown_60": round(f.drawdown_60, 4)})
+    return events
+
+
+def analyze(symbol: str, history_root: Path, output_root: Path) -> dict:
+    bars = load_bars(history_root, symbol)
+    features = build_features(bars)
+    names = ["SMA20", "SMA50", "EMA12_26", "MACD", "RSI", "BREAKOUT20", "VOLUME_SPIKE"]
+    accuracies = [_indicator_accuracy(features, name) for name in names]
+    evaluated = [f for f in features if f.prediction != "NEUTRAL" and f.prediction_correct is not None]
+    correct = sum(bool(f.prediction_correct) for f in evaluated)
+    report = {
+        "symbol": symbol,
+        "source": "TSETMC history stored in Git",
+        "method": "walk-forward, end-of-day signal; 5-trading-day forward return; no look-ahead",
+        "bars": len(bars), "range_start": bars[0].date, "range_end": bars[-1].date,
+        "composite": {"signals": len(evaluated), "correct": correct, "accuracy": round(correct / len(evaluated), 4) if evaluated else None},
+        "indicators": accuracies,
+        "sensitive_points": sensitive_points(features),
     }
-    result: dict[str, Any] = {}
-    for name, rule in rules.items():
-        rets = []
-        for i in range(len(rows) - horizon):
-            if not rule(rows[i]) or close[i] in (None, 0) or close[i + horizon] is None: continue
-            rets.append((close[i + horizon] / close[i] - 1) * 100)
-        wins = sum(x > 0 for x in rets)
-        result[name] = {"signals": len(rets), "win_rate_pct": round(100 * wins / len(rets), 2) if rets else None, "avg_forward_return_pct": round(sum(rets) / len(rets), 2) if rets else None, "median_forward_return_pct": round(sorted(rets)[len(rets)//2], 2) if rets else None}
-    return result
-
-
-def sensitive_points(rows: list[dict[str, Any]], window: int = 10) -> list[dict[str, Any]]:
-    close = [_num(r, "pClosing", "close", "closingPrice") for r in rows]; points = []
-    for i in range(window, len(rows) - window):
-        c = close[i]
-        if c is None: continue
-        left = [x for x in close[i-window:i] if x is not None]; right = [x for x in close[i+1:i+1+window] if x is not None]
-        if left and right and (c >= max(left) and c >= max(right) or c <= min(left) and c <= min(right)):
-            points.append({"date": _date(rows[i]), "price": c, "type": "resistance" if c >= max(left + right) else "support", "signals": rows[i]["signals"]})
-    return points
-
-
-def analyze_symbol(symbol: str, horizon: int = 5) -> dict[str, Any]:
-    adapter = TsetmcAdapter(); instrument = adapter.resolve_symbol(symbol); ins_code = str(instrument["insCode"])
-    raw = adapter.daily_history(ins_code, 0)
-    rows = enrich(raw)
-    result = {"symbol": symbol, "source": "TSETMC", "ins_code": ins_code, "history_rows": len(rows), "range_start": _date(rows[0]) if rows else None, "range_end": _date(rows[-1]) if rows else None, "backtest_horizon_days": horizon, "indicator_backtest": backtest(rows, horizon), "sensitive_points": sensitive_points(rows), "latest": rows[-1] if rows else None}
-    OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / f"{symbol}.json").write_text(json.dumps(result, ensure_ascii=False, indent=2, default=_json_default), encoding="utf-8")
-    if rows:
-        fields = ["dEven", "pOpening", "pMax", "pMin", "pClosing", "pDrCotVal", "qTotTran5J", "qTotCap", "zTotTran", "sma20", "sma50", "sma200", "ema12", "ema26", "macd", "macd_signal", "rsi14", "atr14", "volume_sma20", "signals"]
-        with (OUT / f"{symbol}.csv").open("w", newline="", encoding="utf-8-sig") as f:
-            w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore"); w.writeheader()
-            for r in rows:
-                x = dict(r); x["signals"] = ",".join(x.get("signals", [])); w.writerow(x)
-    return result
-
-
-def _json_default(value: Any) -> Any:
-    if isinstance(value, float) and (math.isnan(value) or math.isinf(value)): return None
-    raise TypeError(f"not JSON serializable: {type(value).__name__}")
+    output_root.mkdir(parents=True, exist_ok=True)
+    (output_root / f"{symbol}_analysis.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    with (output_root / f"{symbol}_signals.csv").open("w", encoding="utf-8-sig", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(asdict(features[0]).keys()))
+        writer.writeheader(); writer.writerows(asdict(f) for f in features)
+    events = report["sensitive_points"]
+    with (output_root / f"{symbol}_sensitive_points.csv").open("w", encoding="utf-8-sig", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=sorted({k for e in events for k in e}) if events else ["date", "type", "close"])
+        writer.writeheader(); writer.writerows(events)
+    return report
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(); p.add_argument("symbol"); p.add_argument("--horizon", type=int, default=5); args = p.parse_args()
-    result = analyze_symbol(args.symbol, args.horizon)
-    print(json.dumps(result, ensure_ascii=False, indent=2, default=_json_default))
+    parser = argparse.ArgumentParser(description="Walk-forward technical analysis using TSETMC history stored in Git")
+    parser.add_argument("symbol")
+    parser.add_argument("--history-root", default="runtime/history")
+    parser.add_argument("--output-root", default="runtime/analysis")
+    args = parser.parse_args()
+    report = analyze(args.symbol, Path(args.history_root), Path(args.output_root))
+    print(json.dumps({k: v for k, v in report.items() if k != "sensitive_points"}, ensure_ascii=False, indent=2))
+    print(f"sensitive_points={len(report['sensitive_points'])}")
 
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    main()
