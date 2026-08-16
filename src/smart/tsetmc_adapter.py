@@ -1,8 +1,8 @@
 """TSETMC adapter for the Iran-side SMART agent.
 
 Uses the community-documented cdn.tsetmc.com JSON endpoints. Network calls
-are intended to run from the user's Iranian connection. The adapter keeps
-collection separate from analysis and persists raw snapshots.
+run from the user's Windows/Iran connection. Collection persists both the
+raw snapshot and every daily historical record for later analysis.
 """
 
 from __future__ import annotations
@@ -70,21 +70,28 @@ class TsetmcAdapter:
         ins_code = str(instrument["insCode"])
         observed_at = datetime.now(timezone.utc)
         history = self.daily_history(ins_code, 0)
+        closing = self.closing_price(ins_code)
+        clients = self.client_type(ins_code)
         payload = {
             "instrument": instrument,
-            "closing_price": self.closing_price(ins_code),
-            "client_type": self.client_type(ins_code),
+            "closing_price": closing,
+            "client_type": clients,
             "daily_history": history,
             "ins_code": ins_code,
             "requested_symbol": symbol,
         }
         self.store.save(symbol, "tsetmc", observed_at, payload)
+        historical_rows_saved = self.store.save_daily_history(symbol, "tsetmc", observed_at, history)
+        coverage = self.store.history_coverage(symbol, "tsetmc")
         return {
             "symbol": symbol,
             "ins_code": ins_code,
             "source": "tsetmc",
             "observed_at": observed_at.isoformat(),
             "history_rows": len(history),
+            "historical_rows_saved": historical_rows_saved,
+            "history_coverage": coverage,
             "latest_history": history[0] if history else None,
+            "oldest_history": history[-1] if history else None,
             "payload": payload,
         }
