@@ -1,7 +1,8 @@
 """Historical, point-in-time stock DNA and regime/strategy evaluation.
 
-No future observations are allowed in calculations for a given market date.
-This module provides the first deterministic foundation for per-symbol learning.
+History from TSETMC is normally newest-first. This module normalizes it to
+oldest-first before any rolling calculation and never uses future rows for a
+point-in-time analysis.
 """
 from __future__ import annotations
 
@@ -17,26 +18,21 @@ class SignalResult:
     reason: str
 
 
-def _close(row: dict[str, Any]) -> float | None:
-    v = row.get("pClosing")
-    try:
-        return float(v) if v is not None else None
-    except (TypeError, ValueError):
-        return None
+def normalize_history(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return daily history oldest-first, without mutating the input."""
+    return sorted(rows, key=lambda r: int(r.get("dEven", 0)))
 
 
-def _volume(row: dict[str, Any]) -> float | None:
-    v = row.get("qTotTran5J")
+def _num(row: dict[str, Any], key: str) -> float | None:
     try:
+        v = row.get(key)
         return float(v) if v is not None else None
     except (TypeError, ValueError):
         return None
 
 
 def _sma(values: list[float], n: int) -> float | None:
-    if len(values) < n:
-        return None
-    return mean(values[-n:])
+    return mean(values[-n:]) if len(values) >= n else None
 
 
 def _rsi(values: list[float], n: int = 14) -> float | None:
@@ -52,12 +48,13 @@ def _rsi(values: list[float], n: int = 14) -> float | None:
 
 
 def point_in_time_analysis(rows: list[dict[str, Any]], end_index: int) -> dict[str, Any]:
-    """Analyze one date using rows[0:end_index+1] only."""
+    """Analyze one date using rows up to and including end_index only."""
+    rows = normalize_history(rows)
     history = rows[: end_index + 1]
-    closes = [v for r in history if (v := _close(r)) is not None]
-    volumes = [v for r in history if (v := _volume(r)) is not None]
+    closes = [v for r in history if (v := _num(r, "pClosing")) is not None]
+    volumes = [v for r in history if (v := _num(r, "qTotTran5J")) is not None]
     if not closes:
-        return {"status": "insufficient_data"}
+        return {"status": "insufficient_data", "point_in_time": True}
 
     price = closes[-1]
     sma20 = _sma(closes, 20)
@@ -65,7 +62,8 @@ def point_in_time_analysis(rows: list[dict[str, Any]], end_index: int) -> dict[s
     sma200 = _sma(closes, 200)
     rsi14 = _rsi(closes, 14)
     vol20 = _sma(volumes, 20)
-    rvol = volumes[-1] / vol20 if vol20 else None
+    latest_volume = volumes[-1] if volumes else None
+    rvol = latest_volume / vol20 if vol20 else None
 
     if sma50 is not None and sma200 is not None:
         if price > sma50 > sma200:
@@ -78,7 +76,7 @@ def point_in_time_analysis(rows: list[dict[str, Any]], end_index: int) -> dict[s
         regime = "insufficient_history"
 
     signals: list[SignalResult] = []
-    if sma20 and sma50:
+    if sma20 is not None and sma50 is not None:
         trend_score = 80.0 if price > sma20 > sma50 else 20.0 if price < sma20 < sma50 else 50.0
         signals.append(SignalResult("trend_following", trend_score, "price/SMA20/SMA50 alignment"))
     if rsi14 is not None:
@@ -88,7 +86,6 @@ def point_in_time_analysis(rows: list[dict[str, Any]], end_index: int) -> dict[s
         volume_score = 75.0 if rvol >= 1.5 else 60.0 if rvol >= 1.0 else 45.0
         signals.append(SignalResult("volume_confirmation", volume_score, f"RVOL20={rvol:.2f}"))
 
-    # Regime-aware weighting, intentionally transparent and adjustable.
     weights = {
         "bull": {"trend_following": 0.45, "momentum_rsi": 0.25, "volume_confirmation": 0.30},
         "sideways": {"trend_following": 0.25, "momentum_rsi": 0.45, "volume_confirmation": 0.30},
@@ -107,6 +104,7 @@ def point_in_time_analysis(rows: list[dict[str, Any]], end_index: int) -> dict[s
         "sma200": sma200,
         "rsi14": rsi14,
         "volume20": vol20,
+        "latest_volume": latest_volume,
         "rvol20": rvol,
         "strategy_signals": [s.__dict__ for s in signals],
         "smart_score": round(score, 2),
