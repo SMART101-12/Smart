@@ -25,6 +25,6 @@ jobs:
         run: |
           git config user.name 'SMART Experiment Bot'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add runtime/experiments/پالایش/daily_prediction_report.json
+          git add runtime/experiments/پالایش/daily_prediction_report.json runtime/experiments/پالایش/daily_prediction_summary.json
           git diff --cached --quiet || git commit -m 'experiment: update Palayesh walk-forward report [skip ci]'
           git push
