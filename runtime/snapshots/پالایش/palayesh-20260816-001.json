@@ -2,7 +2,7 @@
   "request_id": "palayesh-20260816-001",
   "symbol": "پالایش",
   "source": "tsetmc",
-  "observed_at": "2026-08-16T06:55:13.660362+00:00",
+  "observed_at": "2026-08-16T07:05:12.447733+00:00",
   "ins_code": "67675656072510693",
   "history_rows": 1425,
   "latest_history": {
@@ -57,7 +57,7 @@
       "cEtavalTitle": "مجاز"
     },
     "instrument": null,
-    "lastHEven": 102323,
+    "lastHEven": 103329,
     "finalLastDate": 20260816,
     "nvt": 0.0,
     "mop": 0,
@@ -72,26 +72,26 @@
     "id": 0,
     "insCode": "0",
     "dEven": 20260816,
-    "hEven": 102323,
-    "pClosing": 511079.0,
+    "hEven": 103329,
+    "pClosing": 511262.0,
     "iClose": false,
     "yClose": false,
-    "pDrCotVal": 515000.0,
-    "zTotTran": 6307.0,
-    "qTotTran5J": 8691324.0,
-    "qTotCap": 4441956156074.0
+    "pDrCotVal": 515102.0,
+    "zTotTran": 6824.0,
+    "qTotTran5J": 9020610.0,
+    "qTotCap": 4611896274787.0
   },
   "client_type": {
-    "buy_I_Volume": 5591849.0,
-    "buy_N_Volume": 3084313.0,
+    "buy_I_Volume": 5807351.0,
+    "buy_N_Volume": 3198937.0,
     "buy_DDD_Volume": 0.0,
-    "buy_CountI": 2075,
+    "buy_CountI": 2336,
     "buy_CountN": 9,
     "buy_CountDDD": 0,
-    "sell_I_Volume": 7396741.0,
-    "sell_N_Volume": 1279421.0,
-    "sell_CountI": 1882,
-    "sell_CountN": 15
+    "sell_I_Volume": 7698216.0,
+    "sell_N_Volume": 1308072.0,
+    "sell_CountI": 1969,
+    "sell_CountN": 16
   },
   "instrument": {
     "insCode2": "9602593150636254",
