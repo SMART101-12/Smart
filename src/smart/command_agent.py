@@ -49,18 +49,19 @@ def get_file(path: str) -> tuple[dict[str, Any] | None, str | None]:
     r.raise_for_status()
     body = r.json()
     content = base64.b64decode(body["content"]).decode("utf-8")
-    return json.loads(content), body["sha"]
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError:
+        # A pre-existing result file may be empty/invalid JSON. We still need
+        # its blob SHA so GitHub can replace it safely.
+        parsed = None
+    return parsed, body["sha"]
 
 
 def put_json(path: str, payload: dict[str, Any], message: str, sha: str | None = None) -> None:
     url = f"{API}/repos/{REPO}/contents/{path}"
     if sha is None:
-        # GitHub requires the current blob SHA when replacing an existing file.
-        try:
-            _, sha = get_file(path)
-        except requests.HTTPError as exc:
-            if exc.response is None or exc.response.status_code != 404:
-                raise
+        _, sha = get_file(path)
     body: dict[str, Any] = {
         "message": message,
         "content": base64.b64encode(json.dumps(payload, ensure_ascii=False, indent=2).encode()).decode(),
