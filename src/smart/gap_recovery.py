@@ -41,7 +41,7 @@ def _db_dates(symbol: str, source: str = "tsetmc") -> set[date]:
 
 
 def _load_history(symbol: str) -> dict[str, Any]:
-    """Load the real Git history layout: runtime/history/<symbol>/<YYYYMM>.json."""
+    """Load canonical Git history from runtime/history/<symbol>/<YYYYMM>.json."""
     root = HISTORY_ROOT / symbol
     rows: dict[date, dict[str, Any]] = {}
     meta: dict[str, Any] = {"symbol": symbol, "source": "tsetmc"}
@@ -61,7 +61,6 @@ def _load_history(symbol: str) -> dict[str, Any]:
                     d = _date(row.get("dEven"))
                     if d:
                         rows[d] = row
-    # Backward compatibility only; monthly files are canonical.
     flat = HISTORY_ROOT / f"{symbol}.json"
     if flat.exists():
         try:
@@ -100,7 +99,9 @@ def _save_monthly(symbol: str, payload: dict[str, Any]) -> None:
             "fields_note": "dEven=YYYYMMDD, pClosing=closing price, pDrCotVal=last/traded price, qTotTran5J=volume, qTotCap=trade value, zTotTran=trade count.",
             "daily_history": rows,
         }
-        (root / f"{month}.json").write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
+        (root / f"{month}.json").write_text(
+            json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
 
 def _quality_path(symbol: str) -> Path:
@@ -120,11 +121,13 @@ def _load_quality(symbol: str) -> dict[str, Any]:
 
 def _save_quality(symbol: str, quality: dict[str, Any]) -> None:
     quality["checked_at"] = datetime.now(timezone.utc).isoformat()
-    _quality_path(symbol).write_text(json.dumps(quality, ensure_ascii=False, indent=2), encoding="utf-8")
+    _quality_path(symbol).write_text(
+        json.dumps(quality, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
 def _sync_to_git(symbol: str, payload: dict[str, Any], quality: dict[str, Any]) -> None:
-    """Write repaired history back using the same monthly Git layout."""
+    """Write repaired history and data-quality state back to Git."""
     from .command_agent import put_json
 
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -144,23 +147,43 @@ def _sync_to_git(symbol: str, payload: dict[str, Any], quality: dict[str, Any]) 
             "fields_note": "dEven=YYYYMMDD, pClosing=closing price, pDrCotVal=last/traded price, qTotTran5J=volume, qTotCap=trade value, zTotTran=trade count.",
             "daily_history": rows,
         }
-        put_json(f"runtime/history/{symbol}/{month}.json", month_payload, f"agent: gap recovery {symbol} {month}")
+        put_json(
+            f"runtime/history/{symbol}/{month}.json",
+            month_payload,
+            f"agent: gap recovery {symbol} {month}",
+        )
     put_json(f"runtime/data_quality/{symbol}.json", quality, f"agent: data quality {symbol}")
 
 
-def _expected_dates(start: date, end: date):
+def _candidate_week_dates(start: date, end: date):
+    """Cheap pre-filter only; the exchange calendar remains authoritative."""
     cur = start
     while cur <= end:
-        # Tehran exchange is normally open Saturday-Wednesday.
         if cur.weekday() in (5, 6, 0, 1, 2):
             yield cur
         cur += timedelta(days=1)
 
 
+def _calendar_dates(adapter: TsetmcAdapter, ins_code: str) -> set[date]:
+    rows = adapter.instrument_calendar(ins_code)
+    result: set[date] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        d = _date(row.get("dEven") or row.get("date") or row.get("market_date"))
+        if d:
+            result.add(d)
+    return result
+
+
 def repair_symbol(symbol: str, *, today: date | None = None) -> dict[str, Any]:
     today = today or datetime.now(timezone.utc).date()
     payload = _load_history(symbol)
-    existing = {_date(r.get("dEven")): r for r in payload.get("daily_history", []) if _date(r.get("dEven"))}
+    existing = {
+        d: r
+        for r in payload.get("daily_history", [])
+        if (d := _date(r.get("dEven")))
+    }
     db_existing = _db_dates(symbol)
 
     if not existing and not db_existing:
@@ -175,42 +198,58 @@ def repair_symbol(symbol: str, *, today: date | None = None) -> dict[str, Any]:
         ins_code = str(adapter.resolve_symbol(symbol)["insCode"])
         payload["ins_code"] = ins_code
 
-    calendar_rows = adapter.instrument_calendar(ins_code)
-    calendar_dates = {_date(r.get("dEven") or r.get("date") or r.get("market_date")) for r in calendar_rows if isinstance(r, dict)}
-    calendar_dates.discard(None)
+    # The instrument calendar is the source of truth. Saturday-Wednesday is
+    # only a cheap candidate filter so we never manufacture holiday dates.
+    calendar_dates = _calendar_dates(adapter, ins_code)
+    scan_end = today - timedelta(days=1)
+    candidate_dates = set(_candidate_week_dates(start, scan_end))
+    expected_dates = {d for d in candidate_dates if d in calendar_dates}
 
     quality = _load_quality(symbol)
     dates = quality.setdefault("dates", {})
+
+    # Remove stale false-positive gap records: any date that is not in the
+    # exchange calendar must not remain a retryable/missing date.
+    stale_keys = []
+    for key, entry in list(dates.items()):
+        d = _date(key)
+        if d and d <= scan_end and d not in expected_dates and isinstance(entry, dict):
+            if entry.get("status") in {
+                "MARKET_CLOSED_OR_NO_TRADING",
+                "UNRESOLVED",
+                "FETCH_FAILED",
+            } or entry.get("retry"):
+                stale_keys.append(key)
+                dates.pop(key, None)
+
     repaired: list[str] = []
     unresolved: list[str] = []
-    closed: list[str] = []
 
-    # Never label today as missing before the trading session is complete.
-    scan_end = today - timedelta(days=1)
-    for d in _expected_dates(start, scan_end):
+    for d in sorted(expected_dates):
         if d in existing or d in db_existing:
+            dates.pop(d.strftime("%Y%m%d"), None)
             continue
+
         key = d.strftime("%Y%m%d")
         entry = dates.setdefault(key, {"attempts": 0})
         entry["last_check"] = datetime.now(timezone.utc).isoformat()
-
-        if d not in calendar_dates:
-            entry.update({"status": "MARKET_CLOSED_OR_NO_TRADING", "market_open": False, "retry": False})
-            closed.append(key)
-            continue
-
         entry["attempts"] = int(entry.get("attempts", 0)) + 1
         try:
             row = adapter.closing_price_daily(ins_code, key)
             if isinstance(row, dict) and _date(row.get("dEven")) == d:
                 existing[d] = row
-                entry.update({"status": "DATA_AVAILABLE", "market_open": True, "retry": False})
+                dates.pop(key, None)
                 repaired.append(key)
             else:
                 entry.update({"status": "UNRESOLVED", "market_open": True, "retry": True})
                 unresolved.append(key)
         except Exception as exc:
-            entry.update({"status": "FETCH_FAILED", "market_open": True, "retry": True, "error": str(exc)})
+            entry.update({
+                "status": "FETCH_FAILED",
+                "market_open": True,
+                "retry": True,
+                "error": str(exc),
+            })
             unresolved.append(key)
 
     payload["daily_history"] = list(existing.values())
@@ -218,10 +257,10 @@ def repair_symbol(symbol: str, *, today: date | None = None) -> dict[str, Any]:
     quality["summary"] = {
         "history_layout": "runtime/history/<symbol>/<YYYYMM>.json",
         "calendar_dates": len(calendar_dates),
-        "missing_before": len(repaired) + len(unresolved),
+        "expected_trading_dates": len(expected_dates),
+        "stale_false_positive_dates_removed": len(stale_keys),
         "repaired": len(repaired),
         "unresolved": len(unresolved),
-        "closed_or_no_trading": len(closed),
         "next_retry_seconds": RETRY_SECONDS,
     }
     _save_quality(symbol, quality)
@@ -232,7 +271,7 @@ def repair_symbol(symbol: str, *, today: date | None = None) -> dict[str, Any]:
         **quality["summary"],
         "repaired_dates": repaired,
         "unresolved_dates": unresolved,
-        "closed_or_no_trading_dates": closed,
+        "removed_false_positive_dates": stale_keys,
     }
 
 
