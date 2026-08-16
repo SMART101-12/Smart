@@ -52,8 +52,6 @@ def get_file(path: str) -> tuple[dict[str, Any] | None, str | None]:
     try:
         parsed = json.loads(content)
     except json.JSONDecodeError:
-        # A pre-existing result file may be empty/invalid JSON. We still need
-        # its blob SHA so GitHub can replace it safely.
         parsed = None
     return parsed, body["sha"]
 
@@ -69,7 +67,7 @@ def put_json(path: str, payload: dict[str, Any], message: str, sha: str | None =
     }
     if sha:
         body["sha"] = sha
-    r = requests.put(url, headers=headers(), json=body, timeout=20)
+    r = requests.put(url, headers=headers(), json=body, timeout=30)
     r.raise_for_status()
 
 
@@ -103,6 +101,23 @@ def _compact_snapshot(result: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _history_export(result: dict[str, Any]) -> dict[str, Any]:
+    data = result.get("data", {})
+    payload = data.get("payload", {})
+    history = payload.get("daily_history", [])
+    return {
+        "symbol": result.get("symbol"),
+        "ins_code": data.get("ins_code"),
+        "source": data.get("source"),
+        "exported_at": result.get("completed_at"),
+        "history_rows": len(history),
+        "first_history_date": history[-1].get("dEven") if history else None,
+        "last_history_date": history[0].get("dEven") if history else None,
+        "fields_note": "Raw TSETMC daily history. dEven=market date, pClosing=closing price, pDrCotVal=last/traded price, qTotTran5J=volume, qTotCap=trade value, zTotTran=trade count.",
+        "daily_history": history,
+    }
+
+
 def _load_last() -> str | None:
     try:
         return LAST_REQUEST_FILE.read_text(encoding="utf-8").strip() or None
@@ -127,7 +142,9 @@ def run_once(last_request_id: str | None = None) -> str | None:
     result["command_sha"] = command_sha
     put_json(RESULT_PATH, result, f"agent: result for {request_id}")
     if result.get("status") == "success":
-        put_json(f"runtime/snapshots/{result['symbol']}/{request_id}.json", _compact_snapshot(result), f"agent: snapshot {result['symbol']} {request_id}")
+        symbol = result["symbol"]
+        put_json(f"runtime/snapshots/{symbol}/{request_id}.json", _compact_snapshot(result), f"agent: snapshot {symbol} {request_id}")
+        put_json(f"runtime/history/{symbol}.json", _history_export(result), f"agent: full history {symbol} {request_id}")
     _save_last(request_id)
     return request_id
 
