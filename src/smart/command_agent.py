@@ -120,7 +120,7 @@ def _history_export(result: dict[str, Any]) -> dict[str, Any]:
 
 
 def _monthly_history_exports(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """Split full history into small month files so Git can serve any date directly."""
+    """Keep the raw monthly history for audit/reprocessing."""
     data = result.get("data", {})
     payload = data.get("payload", {})
     history = payload.get("daily_history", [])
@@ -131,9 +131,8 @@ def _monthly_history_exports(result: dict[str, Any]) -> dict[str, dict[str, Any]
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in history:
         raw = str(row.get("dEven", "")).strip()
-        if len(raw) != 8 or not raw.isdigit():
-            continue
-        groups[raw[:6]].append(row)
+        if len(raw) == 8 and raw.isdigit():
+            groups[raw[:6]].append(row)
     return {
         month: {
             "symbol": symbol,
@@ -144,6 +143,51 @@ def _monthly_history_exports(result: dict[str, Any]) -> dict[str, dict[str, Any]
             "rows": len(rows),
             "fields_note": "dEven=YYYYMMDD, pClosing=closing price, pDrCotVal=last/traded price, qTotTran5J=volume, qTotCap=trade value, zTotTran=trade count.",
             "daily_history": sorted(rows, key=lambda r: int(r.get("dEven", 0)), reverse=True),
+        }
+        for month, rows in groups.items()
+    }
+
+
+def _monthly_lookup_exports(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Create tiny, date-addressable monthly files for reliable Git reads.
+
+    These files intentionally contain only one compact record per trading day.
+    The raw monthly files remain available for audit and future feature work.
+    """
+    data = result.get("data", {})
+    payload = data.get("payload", {})
+    history = payload.get("daily_history", [])
+    symbol = result.get("symbol")
+    ins_code = data.get("ins_code")
+    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    fields = (
+        "dEven", "pClosing", "pDrCotVal", "priceFirst", "priceMin", "priceMax",
+        "priceYesterday", "priceChange", "zTotTran", "qTotTran5J", "qTotCap",
+        "iClose", "yClose", "last", "hEven"
+    )
+    for row in history:
+        raw = str(row.get("dEven", "")).strip()
+        if len(raw) != 8 or not raw.isdigit():
+            continue
+        compact = {k: row.get(k) for k in fields if k in row}
+        groups[raw[:6]].append(compact)
+    return {
+        month: {
+            "symbol": symbol,
+            "ins_code": ins_code,
+            "source": data.get("source"),
+            "month": month,
+            "updated_at": result.get("completed_at"),
+            "rows": len(rows),
+            "schema": {
+                "dEven": "YYYYMMDD",
+                "pClosing": "closing price (rial)",
+                "pDrCotVal": "last/traded price (rial)",
+                "qTotTran5J": "volume (shares)",
+                "qTotCap": "trade value (rial)",
+                "zTotTran": "trade count",
+            },
+            "daily": sorted(rows, key=lambda r: int(r.get("dEven", 0)), reverse=True),
         }
         for month, rows in groups.items()
     }
@@ -176,10 +220,11 @@ def run_once(last_request_id: str | None = None) -> str | None:
         symbol = result["symbol"]
         put_json(f"runtime/snapshots/{symbol}/{request_id}.json", _compact_snapshot(result), f"agent: snapshot {symbol} {request_id}")
         put_json(f"runtime/history/{symbol}.json", _history_export(result), f"agent: full history {symbol} {request_id}")
-        # Month-partitioned history is the canonical Git lookup layer.
-        # Each month is small enough to fetch reliably without truncation.
         for month, month_payload in _monthly_history_exports(result).items():
-            put_json(f"runtime/history/{symbol}/{month}.json", month_payload, f"agent: history index {symbol} {month} {request_id}")
+            put_json(f"runtime/history/{symbol}/{month}.json", month_payload, f"agent: raw history {symbol} {month} {request_id}")
+        # Canonical query layer: small files that can be fetched completely and reliably.
+        for month, month_payload in _monthly_lookup_exports(result).items():
+            put_json(f"runtime/history_lookup/{symbol}/{month}.json", month_payload, f"agent: date lookup {symbol} {month} {request_id}")
     _save_last(request_id)
     return request_id
 
