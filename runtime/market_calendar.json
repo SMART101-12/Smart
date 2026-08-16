@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "market_types": {
+    "EQUITY": {
+      "session": "09:00-12:30",
+      "closed_periods": [
+        {
+          "start": "2026-02-28",
+          "end": "2026-05-18",
+          "calendar_start": "1404/12/09",
+          "calendar_end": "1405/02/28",
+          "reason": "Ramadan War market-wide equity trading suspension",
+          "scope": "equity",
+          "source_note": "Stock-market trading was suspended from 9 Esfand 1404; equity trading resumed on 29 Ordibehesht 1405."
+        }
+      ]
+    },
+    "GOLD_FUND": {
+      "session": "12:00-17:00",
+      "closed_periods": []
+    }
+  }
+}
