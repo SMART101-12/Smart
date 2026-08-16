@@ -134,921 +134,921 @@
     "20260812",
     "20260816"
   ],
-  "checked_at": "2026-08-16T08:16:27.194132+00:00",
+  "checked_at": "2026-08-16T08:19:02.585186+00:00",
   "dates": {
     "20200829": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20200830": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20201017": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20201025": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20201103": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20210117": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20210210": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20210320": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20210321": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20210322": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20210323": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20210324": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20210329": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20210504": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20210605": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20210606": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20210720": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20210721": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20210724": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20210725": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20210816": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20210817": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20210818": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20210821": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20210927": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20211005": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20211024": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20220215": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20220301": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20220320": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20220321": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20220322": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20220323": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20220402": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20220423": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20220503": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20220504": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20220604": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20220605": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20220710": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20220718": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20220807": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20220808": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20220917": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20220925": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20220927": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20221005": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20221227": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20230204": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20230211": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20230218": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20230308": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20230320": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20230321": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20230322": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20230401": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20230402": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20230412": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20230422": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20230423": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20230516": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20230604": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20230605": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20230802": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20230906": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20230916": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20230924": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20231003": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20231217": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240211": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240225": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240319": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240320": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240323": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240331": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240401": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240410": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240504": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240522": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240603": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240604": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240617": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240625": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240715": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240716": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240728": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240825": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240902": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240904": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20240921": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20250114": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20250128": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20250208": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20250210": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20250212": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20250319": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20250322": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20250323": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20250324": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20250331": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20250401": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20250402": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20250604": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20250614": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20250617": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20250705": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20250706": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20250824": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20250901": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20250910": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20251124": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20260103": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20260117": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20260204": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20260211": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20260301": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20260311": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20260321": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20260322": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20260323": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20260324": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20260401": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20260414": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20260527": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20260624": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20260704": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20260705": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20260706": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20260804": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20260812": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
     },
     "20260816": {
-      "attempts": 1,
-      "last_check": "2026-08-16T08:16:27.194132+00:00",
+      "attempts": 2,
+      "last_check": "2026-08-16T08:19:02.585186+00:00",
       "status": "UNRESOLVED",
       "market_open": "unknown",
       "retry": true
