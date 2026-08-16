@@ -1,85 +1,246 @@
 from __future__ import annotations
-import json, os, sqlite3, time
+
+import json
+import os
+import sqlite3
+import time
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
 from .tsetmc_adapter import TsetmcAdapter
-ROOT=Path(__file__).resolve().parents[2]; DB_PATH=ROOT/"data"/"smart.db"; RUNTIME=ROOT/"runtime"; HISTORY_DIR=RUNTIME/"history"; QUALITY_DIR=RUNTIME/"data_quality"; RETRY_SECONDS=int(os.getenv("SMART_GAP_RETRY_SECONDS","3600"))
-def _date(v:Any)->date|None:
- r=str(v or "").replace("-","").replace("/","").strip()
- if len(r)!=8 or not r.isdigit(): return None
- try:return date(int(r[:4]),int(r[4:6]),int(r[6:8]))
- except ValueError:return None
-def _db_dates(symbol,source="tsetmc"):
- if not DB_PATH.exists(): return []
- with sqlite3.connect(DB_PATH) as c: rows=c.execute("SELECT market_date FROM daily_history WHERE symbol=? AND source=? ORDER BY market_date",(symbol,source)).fetchall()
- return [str(x[0]).replace("-","") for x in rows if x[0]]
-def _load_history(symbol):
- p=HISTORY_DIR/f"{symbol}.json"; return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {"symbol":symbol,"daily_history":[]}
-def _save_history(symbol,payload):
- HISTORY_DIR.mkdir(parents=True,exist_ok=True); rows=payload.get("daily_history",[]); payload["daily_history"]=sorted(rows,key=lambda r:int(r.get("dEven",0)),reverse=True); payload["history_rows"]=len(rows); payload["first_history_date"]=payload["daily_history"][-1].get("dEven") if rows else None; payload["last_history_date"]=payload["daily_history"][0].get("dEven") if rows else None; payload["repaired_at"]=datetime.now(timezone.utc).isoformat(); (HISTORY_DIR/f"{symbol}.json").write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding="utf-8")
-def _quality_path(symbol): QUALITY_DIR.mkdir(parents=True,exist_ok=True); return QUALITY_DIR/f"{symbol}.json"
-def _load_quality(symbol):
- p=_quality_path(symbol); return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {"symbol":symbol,"dates":{}}
-def _save_quality(symbol,q): q["checked_at"]=datetime.now(timezone.utc).isoformat(); _quality_path(symbol).write_text(json.dumps(q,ensure_ascii=False,indent=2),encoding="utf-8")
-def _expected_dates(start,end):
- cur=start
- while cur<=end:
-  if cur.weekday() in (5,6,0,1,2): yield cur
-  cur+=timedelta(days=1)
-def _calendar_dates(rows):
- out=set()
- def walk(v):
-  if isinstance(v,dict):
-   for k,x in v.items():
-    if k in ("dEven","market_date","date","dateInt","DEven"):
-     d=_date(x)
-     if d: out.add(d)
-    walk(x)
-  elif isinstance(v,list):
-   for x in v: walk(x)
- walk(rows); return out
-def _monthly_lookup_payloads(symbol,payload):
- groups=defaultdict(list); fields=("dEven","pClosing","pDrCotVal","priceFirst","priceMin","priceMax","priceYesterday","priceChange","zTotTran","qTotTran5J","qTotCap","iClose","yClose","last","hEven")
- for row in payload.get("daily_history",[]):
-  raw=str(row.get("dEven",""));
-  if len(raw)==8 and raw.isdigit(): groups[raw[:6]].append({k:row.get(k) for k in fields if k in row})
- return {m:{"symbol":symbol,"ins_code":payload.get("ins_code"),"source":payload.get("source","tsetmc"),"month":m,"updated_at":payload.get("repaired_at"),"rows":len(rs),"daily":sorted(rs,key=lambda r:int(r.get("dEven",0)),reverse=True)} for m,rs in groups.items()}
-def _sync_to_git(symbol,payload,quality):
- from .command_agent import put_json
- put_json(f"runtime/history/{symbol}.json",payload,f"agent: gap recovery {symbol}"); put_json(f"runtime/data_quality/{symbol}.json",quality,f"agent: data quality {symbol}")
- for m,p in _monthly_lookup_payloads(symbol,payload).items(): put_json(f"runtime/history_lookup/{symbol}/{m}.json",p,f"agent: gap recovery lookup {symbol} {m}")
-def repair_symbol(symbol,*,today=None):
- today=today or datetime.now(timezone.utc).date(); db_dates=_db_dates(symbol); payload=_load_history(symbol); existing={d:r for r in payload.get("daily_history",[]) if (d:=_date(r.get("dEven")))}; db_parsed=[d for x in db_dates if (d:=_date(x))]
- if not existing and not db_parsed: return {"symbol":symbol,"status":"no_history","missing":[]}
- start=min([*existing,*db_parsed]); q=_load_quality(symbol); dates=q.setdefault("dates",{}); adapter=TsetmcAdapter(); ins_code=str(payload.get("ins_code","")).strip()
- if not ins_code:
-  ins_code=str(adapter.resolve_symbol(symbol)["insCode"]); payload["ins_code"]=ins_code
- calendar_dates=_calendar_dates(adapter.instrument_calendar(ins_code))
- # Only completed dates are checked. Today is checked only if TSETMC calendar already contains it.
- scan_end=today-timedelta(days=1)
- candidates=[d for d in _expected_dates(start,scan_end) if d in calendar_dates and d not in existing and d not in db_parsed]
- repaired=[]; unresolved=[]; closed=[]
- for d in _expected_dates(start,scan_end):
-  if d in existing or d in db_parsed: continue
-  key=d.strftime("%Y%m%d"); e=dates.setdefault(key,{"attempts":0}); e["last_check"]=datetime.now(timezone.utc).isoformat()
-  if d not in calendar_dates:
-   e.update({"status":"MARKET_CLOSED_OR_NO_TRADING","market_open":False,"retry":False}); closed.append(key); continue
-  e["attempts"]=int(e.get("attempts",0))+1
-  try:
-   row=adapter.closing_price_daily(ins_code,key)
-   if isinstance(row,dict) and _date(row.get("dEven"))==d:
-    existing[d]=row; e.update({"status":"DATA_AVAILABLE","market_open":True,"retry":False}); repaired.append(key)
-   else:
-    e.update({"status":"UNRESOLVED","market_open":True,"retry":True}); unresolved.append(key)
-  except Exception as exc:
-   e.update({"status":"FETCH_FAILED","market_open":True,"retry":True,"error":str(exc)}); unresolved.append(key)
- payload["daily_history"]=list(existing.values()); _save_history(symbol,payload); q["summary"]={"calendar_trading_dates":len(calendar_dates),"missing_before":len(candidates),"repaired":len(repaired),"unresolved":len(unresolved),"closed_or_no_trading":len(closed),"next_retry_seconds":RETRY_SECONDS}; _save_quality(symbol,q); _sync_to_git(symbol,payload,q)
- return {"symbol":symbol,**q["summary"],"repaired_dates":repaired,"unresolved_dates":unresolved,"closed_or_no_trading_dates":closed}
-def run(symbols):
- while True:
-  for symbol in symbols:
-   try: print(f"gap-recovery {symbol}: {repair_symbol(symbol)}",flush=True)
-   except Exception as exc: print(f"gap-recovery {symbol}: {type(exc).__name__}: {exc}",flush=True)
-  time.sleep(RETRY_SECONDS)
+
+ROOT = Path(__file__).resolve().parents[2]
+DB_PATH = ROOT / "data" / "smart.db"
+RUNTIME = ROOT / "runtime"
+HISTORY_ROOT = RUNTIME / "history"
+QUALITY_ROOT = RUNTIME / "data_quality"
+RETRY_SECONDS = int(os.getenv("SMART_GAP_RETRY_SECONDS", "3600"))
+
+
+def _date(value: Any) -> date | None:
+    raw = str(value or "").replace("-", "").replace("/", "").strip()
+    if len(raw) != 8 or not raw.isdigit():
+        return None
+    try:
+        return date(int(raw[:4]), int(raw[4:6]), int(raw[6:8]))
+    except ValueError:
+        return None
+
+
+def _db_dates(symbol: str, source: str = "tsetmc") -> set[date]:
+    if not DB_PATH.exists():
+        return set()
+    with sqlite3.connect(DB_PATH) as con:
+        rows = con.execute(
+            "SELECT market_date FROM daily_history WHERE symbol=? AND source=?",
+            (symbol, source),
+        ).fetchall()
+    return {d for x in rows if (d := _date(x[0]))}
+
+
+def _load_history(symbol: str) -> dict[str, Any]:
+    """Load the real Git history layout: runtime/history/<symbol>/<YYYYMM>.json."""
+    root = HISTORY_ROOT / symbol
+    rows: dict[date, dict[str, Any]] = {}
+    meta: dict[str, Any] = {"symbol": symbol, "source": "tsetmc"}
+    if root.exists():
+        for path in sorted(root.glob("*.json")):
+            if not path.stem.isdigit() or len(path.stem) != 6:
+                continue
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(payload, dict):
+                for key in ("ins_code", "source", "symbol"):
+                    if payload.get(key):
+                        meta[key] = payload[key]
+                for row in payload.get("daily_history", []):
+                    d = _date(row.get("dEven"))
+                    if d:
+                        rows[d] = row
+    # Backward compatibility only; monthly files are canonical.
+    flat = HISTORY_ROOT / f"{symbol}.json"
+    if flat.exists():
+        try:
+            payload = json.loads(flat.read_text(encoding="utf-8"))
+            if isinstance(payload, dict):
+                for key in ("ins_code", "source", "symbol"):
+                    if payload.get(key):
+                        meta[key] = payload[key]
+                for row in payload.get("daily_history", []):
+                    d = _date(row.get("dEven"))
+                    if d:
+                        rows.setdefault(d, row)
+        except (OSError, json.JSONDecodeError):
+            pass
+    meta["daily_history"] = list(rows.values())
+    return meta
+
+
+def _save_monthly(symbol: str, payload: dict[str, Any]) -> None:
+    root = HISTORY_ROOT / symbol
+    root.mkdir(parents=True, exist_ok=True)
+    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in payload.get("daily_history", []):
+        raw = str(row.get("dEven", ""))
+        if len(raw) == 8 and raw.isdigit():
+            groups[raw[:6]].append(row)
+    for month, rows in groups.items():
+        rows.sort(key=lambda r: int(r.get("dEven", 0)), reverse=True)
+        out = {
+            "symbol": symbol,
+            "ins_code": payload.get("ins_code"),
+            "source": payload.get("source", "tsetmc"),
+            "month": month,
+            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "rows": len(rows),
+            "fields_note": "dEven=YYYYMMDD, pClosing=closing price, pDrCotVal=last/traded price, qTotTran5J=volume, qTotCap=trade value, zTotTran=trade count.",
+            "daily_history": rows,
+        }
+        (root / f"{month}.json").write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _quality_path(symbol: str) -> Path:
+    QUALITY_ROOT.mkdir(parents=True, exist_ok=True)
+    return QUALITY_ROOT / f"{symbol}.json"
+
+
+def _load_quality(symbol: str) -> dict[str, Any]:
+    path = _quality_path(symbol)
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            pass
+    return {"symbol": symbol, "dates": {}}
+
+
+def _save_quality(symbol: str, quality: dict[str, Any]) -> None:
+    quality["checked_at"] = datetime.now(timezone.utc).isoformat()
+    _quality_path(symbol).write_text(json.dumps(quality, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _sync_to_git(symbol: str, payload: dict[str, Any], quality: dict[str, Any]) -> None:
+    """Write repaired history back using the same monthly Git layout."""
+    from .command_agent import put_json
+
+    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in payload.get("daily_history", []):
+        raw = str(row.get("dEven", ""))
+        if len(raw) == 8 and raw.isdigit():
+            groups[raw[:6]].append(row)
+    for month, rows in groups.items():
+        rows.sort(key=lambda r: int(r.get("dEven", 0)), reverse=True)
+        month_payload = {
+            "symbol": symbol,
+            "ins_code": payload.get("ins_code"),
+            "source": payload.get("source", "tsetmc"),
+            "month": month,
+            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "rows": len(rows),
+            "fields_note": "dEven=YYYYMMDD, pClosing=closing price, pDrCotVal=last/traded price, qTotTran5J=volume, qTotCap=trade value, zTotTran=trade count.",
+            "daily_history": rows,
+        }
+        put_json(f"runtime/history/{symbol}/{month}.json", month_payload, f"agent: gap recovery {symbol} {month}")
+    put_json(f"runtime/data_quality/{symbol}.json", quality, f"agent: data quality {symbol}")
+
+
+def _expected_dates(start: date, end: date):
+    cur = start
+    while cur <= end:
+        # Tehran exchange is normally open Saturday-Wednesday.
+        if cur.weekday() in (5, 6, 0, 1, 2):
+            yield cur
+        cur += timedelta(days=1)
+
+
+def repair_symbol(symbol: str, *, today: date | None = None) -> dict[str, Any]:
+    today = today or datetime.now(timezone.utc).date()
+    payload = _load_history(symbol)
+    existing = {_date(r.get("dEven")): r for r in payload.get("daily_history", []) if _date(r.get("dEven"))}
+    db_existing = _db_dates(symbol)
+
+    if not existing and not db_existing:
+        result = {"symbol": symbol, "status": "no_history", "missing": []}
+        _save_quality(symbol, result)
+        return result
+
+    start = min([*existing.keys(), *db_existing])
+    adapter = TsetmcAdapter()
+    ins_code = str(payload.get("ins_code") or "").strip()
+    if not ins_code:
+        ins_code = str(adapter.resolve_symbol(symbol)["insCode"])
+        payload["ins_code"] = ins_code
+
+    calendar_rows = adapter.instrument_calendar(ins_code)
+    calendar_dates = {_date(r.get("dEven") or r.get("date") or r.get("market_date")) for r in calendar_rows if isinstance(r, dict)}
+    calendar_dates.discard(None)
+
+    quality = _load_quality(symbol)
+    dates = quality.setdefault("dates", {})
+    repaired: list[str] = []
+    unresolved: list[str] = []
+    closed: list[str] = []
+
+    # Never label today as missing before the trading session is complete.
+    scan_end = today - timedelta(days=1)
+    for d in _expected_dates(start, scan_end):
+        if d in existing or d in db_existing:
+            continue
+        key = d.strftime("%Y%m%d")
+        entry = dates.setdefault(key, {"attempts": 0})
+        entry["last_check"] = datetime.now(timezone.utc).isoformat()
+
+        if d not in calendar_dates:
+            entry.update({"status": "MARKET_CLOSED_OR_NO_TRADING", "market_open": False, "retry": False})
+            closed.append(key)
+            continue
+
+        entry["attempts"] = int(entry.get("attempts", 0)) + 1
+        try:
+            row = adapter.closing_price_daily(ins_code, key)
+            if isinstance(row, dict) and _date(row.get("dEven")) == d:
+                existing[d] = row
+                entry.update({"status": "DATA_AVAILABLE", "market_open": True, "retry": False})
+                repaired.append(key)
+            else:
+                entry.update({"status": "UNRESOLVED", "market_open": True, "retry": True})
+                unresolved.append(key)
+        except Exception as exc:
+            entry.update({"status": "FETCH_FAILED", "market_open": True, "retry": True, "error": str(exc)})
+            unresolved.append(key)
+
+    payload["daily_history"] = list(existing.values())
+    _save_monthly(symbol, payload)
+    quality["summary"] = {
+        "history_layout": "runtime/history/<symbol>/<YYYYMM>.json",
+        "calendar_dates": len(calendar_dates),
+        "missing_before": len(repaired) + len(unresolved),
+        "repaired": len(repaired),
+        "unresolved": len(unresolved),
+        "closed_or_no_trading": len(closed),
+        "next_retry_seconds": RETRY_SECONDS,
+    }
+    _save_quality(symbol, quality)
+    _sync_to_git(symbol, payload, quality)
+
+    return {
+        "symbol": symbol,
+        **quality["summary"],
+        "repaired_dates": repaired,
+        "unresolved_dates": unresolved,
+        "closed_or_no_trading_dates": closed,
+    }
+
+
+def run(symbols: list[str]) -> None:
+    while True:
+        for symbol in symbols:
+            try:
+                print(f"gap-recovery {symbol}: {repair_symbol(symbol)}", flush=True)
+            except Exception as exc:
+                print(f"gap-recovery {symbol}: {type(exc).__name__}: {exc}", flush=True)
+        time.sleep(RETRY_SECONDS)
