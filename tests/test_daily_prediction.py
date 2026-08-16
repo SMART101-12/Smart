@@ -1,3 +1,5 @@
+from math import isclose
+
 from smart.daily_prediction import normalize_rows, run_walk_forward
 
 
@@ -26,5 +28,5 @@ def test_walk_forward_is_point_in_time_and_learns():
     assert report["no_lookahead"] is True
     assert report["prediction_count"] == 49
     assert report["metrics"]["direction_accuracy_pct"] is not None
-    assert sum(report["final_weights"].values()) == 1.0
+    assert isclose(sum(report["final_weights"].values()), 1.0, rel_tol=1e-12, abs_tol=1e-12)
     assert len(report["learning_log"]) == report["prediction_count"]
