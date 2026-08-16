@@ -154,7 +154,7 @@ def audit_tsetmc_history(symbol: str, *, today: date | None = None) -> dict[str,
     start, end = min(traded), min(today - timedelta(days=1), max(traded)); candidates = set(_candidate_week_dates(start, end)); closed = _official_closed_dates(symbol, start, end)
     thursday_friday = {d for d in _all_dates(start, end) if d.weekday() in (3, 4)}
     gaps = sorted(candidates - traded - closed)
-    return {"symbol": symbol, "source": "TSETMC", "ins_code": ins_code, "market_type": _market_type(symbol), "history_rows_from_tsetmc": len(rows), "range_start": start.isoformat(), "range_end": end.isoformat(), "traded_dates": len(traded), "candidate_weekdays": len(candidates), "official_closed_dates_excluded": len(closed), "thursday_friday_excluded": len(thursday_friday), "unclassified_gaps": [d.isoformat() for d in gaps], "note": "Prices/history come only from TSETMC. Thursday/Friday and known shared market closures are excluded; remaining gaps are not assumed to be holidays and must be user-reviewed."}
+    return {"symbol": symbol, "source": "TSETMC", "ins_code": ins_code, "market_type": _market_type(symbol), "history_rows_from_tsetmc": len(rows), "range_start": start.isoformat(), "range_end": end.isoformat(), "traded_dates": len(traded), "candidate_weekdays": len(candidates), "official_closed_dates_excluded": len(closed), "thursday_friday_excluded": len(thursday_friday), "unclassified_gaps": [d.isoformat() for d in gaps], "note": "Prices/history come only from TSETMC. A TSETMC record always wins over calendar rules; calendar closures are used only when no TSETMC record exists. Thursday/Friday and known shared market closures are excluded; remaining gaps are not assumed to be holidays and must be user-reviewed."}
 
 
 def repair_symbol(symbol: str, *, today: date | None = None, dry_run: bool = False) -> dict[str, Any]:
@@ -162,7 +162,10 @@ def repair_symbol(symbol: str, *, today: date | None = None, dry_run: bool = Fal
     if not existing and not db_existing: return {"symbol": symbol, "status": "no_history", "missing": []}
     start = min([*existing.keys(), *db_existing]); adapter = TsetmcAdapter(); ins_code = str(payload.get("ins_code") or "").strip()
     if not ins_code: ins_code = str(adapter.resolve_symbol(symbol)["insCode"]); payload["ins_code"] = ins_code
-    calendar_dates = _calendar_dates(adapter, ins_code); scan_end = today - timedelta(days=1); candidate_dates = set(_candidate_week_dates(start, scan_end)); official_closed = _official_closed_dates(symbol, start, scan_end); expected_dates = {d for d in candidate_dates if d in calendar_dates and d not in official_closed}
+    calendar_dates = _calendar_dates(adapter, ins_code); scan_end = today - timedelta(days=1); candidate_dates = set(_candidate_week_dates(start, scan_end)); official_closed = _official_closed_dates(symbol, start, scan_end)
+    # IMPORTANT: TSETMC history is authoritative. Calendar data must never remove or suppress a date that already has TSETMC data.
+    # For missing dates, calendar closures are only an exclusion rule; all remaining candidate weekdays are checked against TSETMC.
+    expected_dates = candidate_dates - official_closed
     quality = _load_quality(symbol); dates = quality.setdefault("dates", {}); stale_keys: list[str] = []
     for key, entry in list(dates.items()):
         d = _date(key)
@@ -170,7 +173,9 @@ def repair_symbol(symbol: str, *, today: date | None = None, dry_run: bool = Fal
             stale_keys.append(key); dates.pop(key, None)
     repaired: list[str] = []; unresolved: list[str] = []
     for d in sorted(expected_dates):
-        if d in existing or d in db_existing: dates.pop(d.strftime("%Y%m%d"), None); continue
+        if d in existing or d in db_existing:
+            dates.pop(d.strftime("%Y%m%d"), None)
+            continue
         key = d.strftime("%Y%m%d"); entry = dates.setdefault(key, {"attempts": 0}); entry["last_check"] = datetime.now(timezone.utc).isoformat(); entry["attempts"] = int(entry.get("attempts", 0)) + 1
         try:
             row = adapter.closing_price_daily(ins_code, key)
