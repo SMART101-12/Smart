@@ -3,7 +3,7 @@
   "ins_code": "67675656072510693",
   "source": "tsetmc",
   "month": "202508",
-  "exported_at": "2026-08-16T06:55:13.941568+00:00",
+  "exported_at": "2026-08-16T07:05:12.647953+00:00",
   "rows": 21,
   "fields_note": "dEven=YYYYMMDD, pClosing=closing price, pDrCotVal=last/traded price, qTotTran5J=volume, qTotCap=trade value, zTotTran=trade count.",
   "daily_history": [
