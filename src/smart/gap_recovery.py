@@ -2,13 +2,14 @@
 
 The engine scans every calendar day in the stored history range, checks the
 market-data source for missing trading records, persists a data-quality ledger,
-and retries unresolved dates on every subsequent run.
+updates the Git history files, and retries unresolved dates on every subsequent run.
 """
 from __future__ import annotations
 
 import json
 import os
 import time
+from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -84,6 +85,53 @@ def _expected_dates(start: date, end: date):
         current += timedelta(days=1)
 
 
+def _monthly_lookup_payloads(symbol: str, history_payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    fields = (
+        "dEven", "pClosing", "pDrCotVal", "priceFirst", "priceMin", "priceMax",
+        "priceYesterday", "priceChange", "zTotTran", "qTotTran5J", "qTotCap",
+        "iClose", "yClose", "last", "hEven",
+    )
+    for row in history_payload.get("daily_history", []):
+        raw = str(row.get("dEven", ""))
+        if len(raw) == 8 and raw.isdigit():
+            groups[raw[:6]].append({k: row.get(k) for k in fields if k in row})
+    return {
+        month: {
+            "symbol": symbol,
+            "ins_code": history_payload.get("ins_code"),
+            "source": history_payload.get("source", "tsetmc"),
+            "month": month,
+            "updated_at": history_payload.get("repaired_at"),
+            "rows": len(rows),
+            "schema": {
+                "dEven": "YYYYMMDD",
+                "pClosing": "closing price (rial)",
+                "pDrCotVal": "last/traded price (rial)",
+                "qTotTran5J": "volume (shares)",
+                "qTotCap": "trade value (rial)",
+                "zTotTran": "trade count",
+            },
+            "daily": sorted(rows, key=lambda r: int(r.get("dEven", 0)), reverse=True),
+        }
+        for month, rows in groups.items()
+    }
+
+
+def _sync_to_git(symbol: str, history_payload: dict[str, Any], quality: dict[str, Any]) -> None:
+    """Persist repaired history and lookup/quality files through SMART's Git bridge."""
+    from .command_agent import put_json
+
+    put_json(f"runtime/history/{symbol}.json", history_payload, f"agent: gap recovery {symbol}")
+    put_json(f"runtime/data_quality/{symbol}.json", quality, f"agent: data quality {symbol}")
+    for month, payload in _monthly_lookup_payloads(symbol, history_payload).items():
+        put_json(
+            f"runtime/history_lookup/{symbol}/{month}.json",
+            payload,
+            f"agent: gap recovery lookup {symbol} {month}",
+        )
+
+
 def repair_symbol(symbol: str, *, today: date | None = None) -> dict[str, Any]:
     today = today or datetime.now(timezone.utc).date()
     history_payload = _load_history(symbol)
@@ -135,6 +183,7 @@ def repair_symbol(symbol: str, *, today: date | None = None) -> dict[str, Any]:
         "next_retry_seconds": RETRY_SECONDS,
     }
     _save_quality(symbol, quality)
+    _sync_to_git(symbol, history_payload, quality)
     return {"symbol": symbol, **quality["summary"], "repaired_dates": repaired, "unresolved_dates": unresolved}
 
 
