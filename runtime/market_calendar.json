@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "market_types": {
     "EQUITY": {
       "session": "09:00-12:30",
@@ -12,12 +12,61 @@
           "reason": "Ramadan War market-wide equity trading suspension",
           "scope": "equity",
           "source_note": "Stock-market trading was suspended from 9 Esfand 1404; equity trading resumed on 29 Ordibehesht 1405."
+        },
+        {
+          "start": "2026-03-21",
+          "end": "2026-03-24",
+          "calendar_start": "1405/01/01",
+          "calendar_end": "1405/01/04",
+          "reason": "Nowruz official holiday",
+          "scope": "all_markets"
+        },
+        {
+          "start": "2026-08-04",
+          "end": "2026-08-04",
+          "calendar_start": "1405/05/13",
+          "calendar_end": "1405/05/13",
+          "reason": "Official market holiday",
+          "scope": "all_markets"
+        },
+        {
+          "start": "2026-08-12",
+          "end": "2026-08-12",
+          "calendar_start": "1405/05/21",
+          "calendar_end": "1405/05/21",
+          "reason": "Official market holiday",
+          "scope": "all_markets"
         }
       ]
     },
     "GOLD_FUND": {
       "session": "12:00-17:00",
-      "closed_periods": []
+      "closed_periods": [
+        {
+          "start": "2026-03-21",
+          "end": "2026-03-24",
+          "calendar_start": "1405/01/01",
+          "calendar_end": "1405/01/04",
+          "reason": "Nowruz official holiday",
+          "scope": "all_markets"
+        },
+        {
+          "start": "2026-08-04",
+          "end": "2026-08-04",
+          "calendar_start": "1405/05/13",
+          "calendar_end": "1405/05/13",
+          "reason": "Official market holiday",
+          "scope": "all_markets"
+        },
+        {
+          "start": "2026-08-12",
+          "end": "2026-08-12",
+          "calendar_start": "1405/05/21",
+          "calendar_end": "1405/05/21",
+          "reason": "Official market holiday",
+          "scope": "all_markets"
+        }
+      ]
     }
   }
 }
