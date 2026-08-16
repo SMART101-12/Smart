@@ -17,6 +17,7 @@ RUNTIME = ROOT / "runtime"
 HISTORY_ROOT = RUNTIME / "history"
 QUALITY_ROOT = RUNTIME / "data_quality"
 CALENDAR_PATH = RUNTIME / "market_calendar.json"
+CALENDAR_OVERRIDES_PATH = RUNTIME / "market_calendar_overrides.json"
 RETRY_SECONDS = int(os.getenv("SMART_GAP_RETRY_SECONDS", "3600"))
 
 
@@ -121,13 +122,31 @@ def _market_type(symbol: str) -> str:
     return "GOLD_FUND" if symbol.strip() in {"عیار"} else "EQUITY"
 
 
+def _load_calendar_json(path: Path) -> dict[str, Any]:
+    if not path.exists(): return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return payload if isinstance(payload, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
 def _official_closed_dates(symbol: str, start: date, end: date) -> set[date]:
-    if not CALENDAR_PATH.exists(): return set()
-    try: payload = json.loads(CALENDAR_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError): return set()
+    payload = _load_calendar_json(CALENDAR_PATH)
     periods = payload.get("market_types", {}).get(_market_type(symbol), {}).get("closed_periods", [])
     result: set[date] = set()
     for period in periods:
+        left, right = _date(period.get("start")), _date(period.get("end"))
+        if not left or not right: continue
+        left, right = max(left, start), min(right, end)
+        while left <= right:
+            result.add(left); left += timedelta(days=1)
+
+    overrides = _load_calendar_json(CALENDAR_OVERRIDES_PATH)
+    for raw in overrides.get("remove_closed_dates", []):
+        d = _date(raw)
+        if d and start <= d <= end: result.discard(d)
+    for period in overrides.get("add_closed_periods", []):
         left, right = _date(period.get("start")), _date(period.get("end"))
         if not left or not right: continue
         left, right = max(left, start), min(right, end)
