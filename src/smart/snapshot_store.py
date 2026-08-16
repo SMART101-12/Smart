@@ -53,25 +53,26 @@ class SnapshotStore:
                 (symbol, source, observed_at.isoformat(), observed_at.date().isoformat(), json.dumps(payload, ensure_ascii=False)),
             )
 
-    def save_daily_history(self, symbol: str, source: str, observed_at: datetime, rows: list[dict[str, Any]], date_key: str = "dEven") -> int:
-        """Upsert historical daily rows; return the number of valid rows seen.
+    @staticmethod
+    def _market_date(row: dict[str, Any], date_key: str) -> str | None:
+        raw = row.get(date_key) or row.get("date") or row.get("market_date")
+        if raw is None:
+            return None
+        value = str(raw).strip()
+        if not value:
+            return None
+        # TSETMC may return Gregorian or Jalali dates as YYYYMMDD. Keep the
+        # source representation intact so no calendar system is guessed.
+        return value.replace("/", "-")
 
-        TSETMC's daily records are kept verbatim. We normalize only the market-date
-        column used for deduplication, accepting ISO dates and common YYYYMMDD values.
-        """
+    def save_daily_history(self, symbol: str, source: str, observed_at: datetime, rows: list[dict[str, Any]], date_key: str = "dEven") -> int:
+        """Upsert historical daily rows and deduplicate by source market date."""
         observed_at = observed_at.astimezone(timezone.utc)
         saved = 0
         with self._connect() as con:
             for row in rows:
-                raw_date = row.get(date_key) or row.get("date") or row.get("market_date")
-                if raw_date is None:
-                    continue
-                market_date = str(raw_date)
-                if len(market_date) == 8 and market_date.isdigit():
-                    market_date = f"{market_date[:4]}-{market_date[4:6]}-{market_date[6:]}"
-                try:
-                    date.fromisoformat(market_date)
-                except ValueError:
+                market_date = self._market_date(row, date_key)
+                if market_date is None:
                     continue
                 con.execute(
                     """INSERT INTO daily_history(symbol, source, market_date, payload, observed_at)
@@ -103,11 +104,7 @@ class SnapshotStore:
     def history_coverage(self, symbol: str, source: str | None = None) -> dict[str, Any]:
         rows = self.history(symbol, source)
         dates = [r["market_date"] for r in rows]
-        return {
-            "rows": len(rows),
-            "first_date": min(dates) if dates else None,
-            "last_date": max(dates) if dates else None,
-        }
+        return {"rows": len(rows), "first_date": min(dates) if dates else None, "last_date": max(dates) if dates else None}
 
     def latest(self, symbol: str, source: str | None = None) -> dict[str, Any] | None:
         query = "SELECT symbol, source, observed_at, market_date, payload FROM market_snapshots WHERE symbol=?"
