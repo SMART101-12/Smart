@@ -118,6 +118,42 @@ def _calendar_dates(adapter: TsetmcAdapter, ins_code: str) -> set[date]:
     return result
 
 
+def audit_tsetmc_history(symbol: str, *, today: date | None = None) -> dict[str, Any]:
+    """Audit dates using TSETMC daily history only; no web-search price source is used."""
+    today = today or datetime.now(timezone.utc).date()
+    adapter = TsetmcAdapter()
+    instrument = adapter.resolve_symbol(symbol)
+    ins_code = str(instrument["insCode"])
+    rows = adapter.daily_history(ins_code, 0)
+    traded = {d for row in rows if isinstance(row, dict) and (d := _date(row.get("dEven")))}
+    if not traded:
+        return {"symbol": symbol, "source": "TSETMC", "status": "no_tsetmc_history"}
+    start, end = min(traded), min(today - timedelta(days=1), max(traded))
+    candidates = set(_candidate_week_dates(start, end))
+    thursday_friday = {d for d in _all_dates(start, end) if d.weekday() in (3, 4)}
+    gaps = sorted(candidates - traded)
+    return {
+        "symbol": symbol,
+        "source": "TSETMC",
+        "ins_code": ins_code,
+        "history_rows_from_tsetmc": len(rows),
+        "range_start": start.isoformat(),
+        "range_end": end.isoformat(),
+        "traded_dates": len(traded),
+        "candidate_weekdays": len(candidates),
+        "thursday_friday_excluded": len(thursday_friday),
+        "unclassified_gaps": [d.isoformat() for d in gaps],
+        "note": "Gaps are intentionally not classified as holidays. Known official closures must be loaded into the shared market calendar; remaining gaps should be asked from the user.",
+    }
+
+
+def _all_dates(start: date, end: date):
+    cur = start
+    while cur <= end:
+        yield cur
+        cur += timedelta(days=1)
+
+
 def repair_symbol(symbol: str, *, today: date | None = None, dry_run: bool = False) -> dict[str, Any]:
     today = today or datetime.now(timezone.utc).date(); payload = _load_history(symbol)
     existing = {d: r for r in payload.get("daily_history", []) if (d := _date(r.get("dEven")))}; db_existing = _db_dates(symbol)
