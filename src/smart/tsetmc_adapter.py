@@ -84,8 +84,6 @@ class TsetmcAdapter:
         observed_at = datetime.now(timezone.utc)
         errors: list[dict[str, str]] = []
 
-        # History is the core dataset. Collect it first so a live quote/client
-        # endpoint failure does not discard years of valid historical data.
         history = self.daily_history(ins_code, 0)
 
         try:
@@ -111,7 +109,7 @@ class TsetmcAdapter:
             "data_quality": "partial" if errors else "complete",
         }
         self.store.save(symbol, "tsetmc", observed_at, payload)
-        historical_rows_saved = self.store.save_daily_history(symbol, "tsetmc", observed_at, history)
+        history_persistence = self.store.save_daily_history_incremental(symbol, "tsetmc", observed_at, history)
         coverage = self.store.history_coverage(symbol, "tsetmc")
         return {
             "symbol": symbol,
@@ -119,7 +117,7 @@ class TsetmcAdapter:
             "source": "tsetmc",
             "observed_at": observed_at.isoformat(),
             "history_rows": len(history),
-            "historical_rows_saved": historical_rows_saved,
+            "history_persistence": history_persistence,
             "history_coverage": coverage,
             "latest_history": history[0] if history else None,
             "oldest_history": history[-1] if history else None,
