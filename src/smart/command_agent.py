@@ -54,7 +54,18 @@ def get_file(path: str) -> tuple[dict[str, Any] | None, str | None]:
 
 def put_json(path: str, payload: dict[str, Any], message: str, sha: str | None = None) -> None:
     url = f"{API}/repos/{REPO}/contents/{path}"
-    body: dict[str, Any] = {"message": message, "content": base64.b64encode(json.dumps(payload, ensure_ascii=False, indent=2).encode()).decode(), "branch": BRANCH}
+    if sha is None:
+        # GitHub requires the current blob SHA when replacing an existing file.
+        try:
+            _, sha = get_file(path)
+        except requests.HTTPError as exc:
+            if exc.response is None or exc.response.status_code != 404:
+                raise
+    body: dict[str, Any] = {
+        "message": message,
+        "content": base64.b64encode(json.dumps(payload, ensure_ascii=False, indent=2).encode()).decode(),
+        "branch": BRANCH,
+    }
     if sha:
         body["sha"] = sha
     r = requests.put(url, headers=headers(), json=body, timeout=20)
@@ -122,12 +133,12 @@ def run_once(last_request_id: str | None = None) -> str | None:
 
 def main() -> None:
     last = _load_last()
-    print(f"SMART command agent listening: {REPO}/{COMMAND_PATH}")
+    print(f"SMART command agent listening: {REPO}/{COMMAND_PATH}", flush=True)
     while True:
         try:
             last = run_once(last)
         except Exception as exc:
-            print(f"agent loop error: {type(exc).__name__}: {exc}")
+            print(f"agent loop error: {type(exc).__name__}: {exc}", flush=True)
         time.sleep(POLL_SECONDS)
 
 
