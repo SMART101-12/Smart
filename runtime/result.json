@@ -1,16 +1,20 @@
 {
   "request_id": "palayesh-20260816-001",
   "status": "success",
-  "completed_at": "2026-08-16T06:02:56.716471+00:00",
+  "completed_at": "2026-08-16T06:10:32.600271+00:00",
   "action": "fetch_tsetmc",
   "symbol": "پالایش",
   "data": {
     "symbol": "پالایش",
     "ins_code": "67675656072510693",
     "source": "tsetmc",
-    "observed_at": "2026-08-16T06:02:56.482122+00:00",
-    "history_rows": 1426,
-    "historical_rows_saved": 1426,
+    "observed_at": "2026-08-16T06:10:32.397272+00:00",
+    "history_rows": 1425,
+    "history_persistence": {
+      "inserted": 0,
+      "updated": 1425,
+      "skipped": 0
+    },
     "history_coverage": {
       "rows": 1427,
       "first_date": "20200826",
@@ -90,7 +94,7 @@
           "cEtavalTitle": "مجاز"
         },
         "instrument": null,
-        "lastHEven": 93109,
+        "lastHEven": 93844,
         "finalLastDate": 20260816,
         "nvt": 0.0,
         "mop": 0,
@@ -105,26 +109,26 @@
         "id": 0,
         "insCode": "0",
         "dEven": 20260816,
-        "hEven": 93109,
-        "pClosing": 507668.0,
+        "hEven": 93844,
+        "pClosing": 509219.0,
         "iClose": false,
         "yClose": false,
-        "pDrCotVal": 519450.0,
-        "zTotTran": 3485.0,
-        "qTotTran5J": 4944888.0,
-        "qTotCap": 2510363400464.0
+        "pDrCotVal": 513900.0,
+        "zTotTran": 4023.0,
+        "qTotTran5J": 5964475.0,
+        "qTotCap": 3037224969206.0
       },
       "client_type": {
-        "buy_I_Volume": 4039779.0,
-        "buy_N_Volume": 767495.0,
+        "buy_I_Volume": 4292356.0,
+        "buy_N_Volume": 1595681.0,
         "buy_DDD_Volume": 0.0,
-        "buy_CountI": 1504,
+        "buy_CountI": 1623,
         "buy_CountN": 7,
         "buy_CountDDD": 0,
-        "sell_I_Volume": 4281681.0,
-        "sell_N_Volume": 525593.0,
-        "sell_CountI": 1048,
-        "sell_CountN": 7
+        "sell_I_Volume": 5322444.0,
+        "sell_N_Volume": 565593.0,
+        "sell_CountI": 1193,
+        "sell_CountN": 8
       },
       "daily_history": [
         {
@@ -1325,7 +1329,7 @@
           "qTotCap": 0.0
         },
         {
-          "priceChange": 0.0,
+          "priceChange": -7730.0,
           "priceMin": 0.0,
           "priceMax": 0.0,
           "priceYesterday": 257670.0,
@@ -2009,7 +2013,7 @@
           "qTotCap": 0.0
         },
         {
-          "priceChange": 0.0,
+          "priceChange": -7730.0,
           "priceMin": 0.0,
           "priceMax": 0.0,
           "priceYesterday": 257670.0,
@@ -5391,7 +5395,7 @@
           "qTotCap": 0.0
         },
         {
-          "priceChange": 0.0,
+          "priceChange": -2960.0,
           "priceMin": 0.0,
           "priceMax": 0.0,
           "priceYesterday": 201120.0,
@@ -9991,7 +9995,7 @@
         {
           "priceChange": 4450.0,
           "priceMin": 128550.0,
-          "priceMax": 135090.0,
+          "priceMax": 134440.0,
           "priceYesterday": 129970.0,
           "priceFirst": 129900.0,
           "last": false,
@@ -10048,7 +10052,7 @@
         {
           "priceChange": 970.0,
           "priceMin": 130500.0,
-          "priceMax": 136400.0,
+          "priceMax": 133940.0,
           "priceYesterday": 135020.0,
           "priceFirst": 133200.0,
           "last": false,
@@ -15459,25 +15463,6 @@
           "zTotTran": 15822.0,
           "qTotTran5J": 11767485.0,
           "qTotCap": 2112180650960.0
-        },
-        {
-          "priceChange": 2380.0,
-          "priceMin": 172250.0,
-          "priceMax": 181000.0,
-          "priceYesterday": 175230.0,
-          "priceFirst": 173900.0,
-          "last": false,
-          "id": 0,
-          "insCode": "67675656072510693",
-          "dEven": 20230327,
-          "hEven": 122959,
-          "pClosing": 177970.0,
-          "iClose": false,
-          "yClose": true,
-          "pDrCotVal": 177610.0,
-          "zTotTran": 17016.0,
-          "qTotTran5J": 14552856.0,
-          "qTotCap": 2589972122920.0
         },
         {
           "priceChange": 5890.0,
@@ -21256,7 +21241,7 @@
           "qTotCap": 1220705570040.0
         },
         {
-          "priceChange": -750.0,
+          "priceChange": -710.0,
           "priceMin": 67200.0,
           "priceMax": 69060.0,
           "priceYesterday": 68270.0,
@@ -21265,14 +21250,14 @@
           "id": 0,
           "insCode": "67675656072510693",
           "dEven": 20211215,
-          "hEven": 145959,
-          "pClosing": 67990.0,
+          "hEven": 145344,
+          "pClosing": 68010.0,
           "iClose": false,
           "yClose": true,
-          "pDrCotVal": 67520.0,
-          "zTotTran": 15399.0,
-          "qTotTran5J": 14992986.0,
-          "qTotCap": 1019408446140.0
+          "pDrCotVal": 67560.0,
+          "zTotTran": 14890.0,
+          "qTotTran5J": 14449738.0,
+          "qTotCap": 982724655070.0
         },
         {
           "priceChange": 420.0,
