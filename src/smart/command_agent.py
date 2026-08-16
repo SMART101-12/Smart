@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from .tsetmc_adapter import TsetmcAdapter
 
@@ -39,12 +41,48 @@ def token() -> str:
 
 
 def headers() -> dict[str, str]:
-    return {"Authorization": f"Bearer {token()}", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+    return {
+        "Authorization": f"Bearer {token()}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+
+def _session() -> requests.Session:
+    """HTTP session with bounded retries for transient GitHub/network failures."""
+    retry = Retry(
+        total=4,
+        connect=4,
+        read=4,
+        status=4,
+        backoff_factor=1.0,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset({"GET", "PUT"}),
+        raise_on_status=False,
+    )
+    session = requests.Session()
+    session.mount("https://", HTTPAdapter(max_retries=retry))
+    return session
+
+
+def _request(method: str, url: str, **kwargs: Any) -> requests.Response:
+    """Retry transient SSL/connection failures with exponential backoff."""
+    last_exc: Exception | None = None
+    for attempt in range(1, 6):
+        try:
+            response = _session().request(method, url, **kwargs)
+            return response
+        except (requests.exceptions.SSLError, requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+            last_exc = exc
+            if attempt == 5:
+                raise
+            time.sleep(min(2 ** (attempt - 1), 8))
+    raise last_exc  # type: ignore[misc]
 
 
 def get_file(path: str) -> tuple[dict[str, Any] | None, str | None]:
     url = f"{API}/repos/{REPO}/contents/{path}?ref={BRANCH}"
-    r = requests.get(url, headers=headers(), timeout=20)
+    r = _request("GET", url, headers=headers(), timeout=(15, 45))
     if r.status_code == 404:
         return None, None
     r.raise_for_status()
@@ -68,7 +106,7 @@ def put_json(path: str, payload: dict[str, Any], message: str, sha: str | None =
     }
     if sha:
         body["sha"] = sha
-    r = requests.put(url, headers=headers(), json=body, timeout=30)
+    r = _request("PUT", url, headers=headers(), json=body, timeout=(15, 90))
     r.raise_for_status()
 
 
@@ -80,7 +118,14 @@ def execute(command: dict[str, Any]) -> dict[str, Any]:
     if not symbol or len(symbol) > 32:
         raise ValueError("A valid symbol is required")
     result = TsetmcAdapter().collect_symbol(symbol)
-    return {"request_id": command.get("request_id"), "status": "success", "completed_at": datetime.now(timezone.utc).isoformat(), "action": action, "symbol": symbol, "data": result}
+    return {
+        "request_id": command.get("request_id"),
+        "status": "success",
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+        "action": action,
+        "symbol": symbol,
+        "data": result,
+    }
 
 
 def _compact_snapshot(result: dict[str, Any]) -> dict[str, Any]:
@@ -120,14 +165,10 @@ def _history_export(result: dict[str, Any]) -> dict[str, Any]:
 
 
 def _monthly_history_exports(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """Keep the raw monthly history for audit/reprocessing."""
+    """Keep raw monthly history for audit/reprocessing."""
     data = result.get("data", {})
     payload = data.get("payload", {})
     history = payload.get("daily_history", [])
-    symbol = result.get("symbol")
-    ins_code = data.get("ins_code")
-    source = data.get("source")
-    exported_at = result.get("completed_at")
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in history:
         raw = str(row.get("dEven", "")).strip()
@@ -135,11 +176,11 @@ def _monthly_history_exports(result: dict[str, Any]) -> dict[str, dict[str, Any]
             groups[raw[:6]].append(row)
     return {
         month: {
-            "symbol": symbol,
-            "ins_code": ins_code,
-            "source": source,
+            "symbol": result.get("symbol"),
+            "ins_code": data.get("ins_code"),
+            "source": data.get("source"),
             "month": month,
-            "exported_at": exported_at,
+            "exported_at": result.get("completed_at"),
             "rows": len(rows),
             "fields_note": "dEven=YYYYMMDD, pClosing=closing price, pDrCotVal=last/traded price, qTotTran5J=volume, qTotCap=trade value, zTotTran=trade count.",
             "daily_history": sorted(rows, key=lambda r: int(r.get("dEven", 0)), reverse=True),
@@ -149,32 +190,25 @@ def _monthly_history_exports(result: dict[str, Any]) -> dict[str, dict[str, Any]
 
 
 def _monthly_lookup_exports(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """Create tiny, date-addressable monthly files for reliable Git reads.
-
-    These files intentionally contain only one compact record per trading day.
-    The raw monthly files remain available for audit and future feature work.
-    """
+    """Create tiny, date-addressable monthly files for reliable Git reads."""
     data = result.get("data", {})
     payload = data.get("payload", {})
     history = payload.get("daily_history", [])
-    symbol = result.get("symbol")
-    ins_code = data.get("ins_code")
-    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     fields = (
         "dEven", "pClosing", "pDrCotVal", "priceFirst", "priceMin", "priceMax",
         "priceYesterday", "priceChange", "zTotTran", "qTotTran5J", "qTotCap",
         "iClose", "yClose", "last", "hEven"
     )
+    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in history:
         raw = str(row.get("dEven", "")).strip()
         if len(raw) != 8 or not raw.isdigit():
             continue
-        compact = {k: row.get(k) for k in fields if k in row}
-        groups[raw[:6]].append(compact)
+        groups[raw[:6]].append({k: row.get(k) for k in fields if k in row})
     return {
         month: {
-            "symbol": symbol,
-            "ins_code": ins_code,
+            "symbol": result.get("symbol"),
+            "ins_code": data.get("ins_code"),
             "source": data.get("source"),
             "month": month,
             "updated_at": result.get("completed_at"),
@@ -213,18 +247,30 @@ def run_once(last_request_id: str | None = None) -> str | None:
     try:
         result = execute(command)
     except Exception as exc:
-        result = {"request_id": request_id, "status": "error", "completed_at": datetime.now(timezone.utc).isoformat(), "error": type(exc).__name__ + ": " + str(exc)}
+        result = {
+            "request_id": request_id,
+            "status": "error",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "error": type(exc).__name__ + ": " + str(exc),
+        }
     result["command_sha"] = command_sha
     put_json(RESULT_PATH, result, f"agent: result for {request_id}")
     if result.get("status") == "success":
         symbol = result["symbol"]
         put_json(f"runtime/snapshots/{symbol}/{request_id}.json", _compact_snapshot(result), f"agent: snapshot {symbol} {request_id}")
         put_json(f"runtime/history/{symbol}.json", _history_export(result), f"agent: full history {symbol} {request_id}")
-        for month, month_payload in _monthly_history_exports(result).items():
-            put_json(f"runtime/history/{symbol}/{month}.json", month_payload, f"agent: raw history {symbol} {month} {request_id}")
-        # Canonical query layer: small files that can be fetched completely and reliably.
+
+        # The compact monthly lookup layer is canonical for historical queries.
+        # Raw monthly files are intentionally NOT rewritten on every run: they
+        # create unnecessary GitHub API traffic and were the source of the
+        # previous long-run SSL failure. The full history file remains the
+        # audit/reprocessing source.
         for month, month_payload in _monthly_lookup_exports(result).items():
-            put_json(f"runtime/history_lookup/{symbol}/{month}.json", month_payload, f"agent: date lookup {symbol} {month} {request_id}")
+            put_json(
+                f"runtime/history_lookup/{symbol}/{month}.json",
+                month_payload,
+                f"agent: date lookup {symbol} {month} {request_id}",
+            )
     _save_last(request_id)
     return request_id
 
