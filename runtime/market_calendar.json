@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "market_types": {
     "EQUITY": {
       "session": "09:00-12:30",
@@ -114,6 +114,7 @@
         {"start":"2025-09-10","end":"2025-09-10","reason":"Prophet Muhammad and Imam Jafar Sadegh birthdays official holiday","scope":"all_markets"},
         {"start":"2025-11-24","end":"2025-11-24","reason":"Martyrdom of Fatima Zahra official holiday","scope":"all_markets"},
         {"start":"2026-01-03","end":"2026-01-03","reason":"Birthday of Imam Ali official holiday","scope":"all_markets"},
+        {"start":"2026-01-17","end":"2026-01-17","reason":"Official holiday; market closed","scope":"all_markets"},
         {"start":"2026-01-28","end":"2026-01-28","reason":"Prophet Muhammad Ascension official holiday","scope":"all_markets"},
         {"start":"2026-02-04","end":"2026-02-04","reason":"15 Sha'ban official holiday","scope":"all_markets"},
         {"start":"2026-02-11","end":"2026-02-11","reason":"Islamic Revolution Day official holiday","scope":"all_markets"},
@@ -125,7 +126,6 @@
         {"start":"2026-05-27","end":"2026-05-27","reason":"Eid al-Adha official holiday","scope":"all_markets"},
         {"start":"2026-06-04","end":"2026-06-05","reason":"Khordad 14-15 official holidays","scope":"all_markets"},
         {"start":"2026-06-24","end":"2026-06-25","reason":"Tasua and Ashura official holidays","scope":"all_markets"},
-        {"start":"2026-07-04","end":"2026-07-06","reason":"Emergency market-wide trading suspension","scope":"all_markets"},
         {"start":"2026-08-04","end":"2026-08-04","reason":"Official market holiday","scope":"all_markets"},
         {"start":"2026-08-12","end":"2026-08-13","reason":"Official religious holidays","scope":"all_markets"}
       ]
