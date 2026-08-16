@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -15,3 +18,13 @@ jobs:
           python-version: '3.12'
       - run: pip install -r requirements.txt pytest
       - run: PYTHONPATH=src pytest -q
+      - name: Run Palayesh walk-forward experiment
+        run: PYTHONPATH=src python scripts/run_daily_prediction.py
+      - name: Persist experiment result
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name 'SMART Experiment Bot'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add runtime/experiments/پالایش/daily_prediction_report.json
+          git diff --cached --quiet || git commit -m 'experiment: update Palayesh walk-forward report [skip ci]'
+          git push
