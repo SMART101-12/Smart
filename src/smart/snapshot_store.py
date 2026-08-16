@@ -61,8 +61,6 @@ class SnapshotStore:
         value = str(raw).strip()
         if not value:
             return None
-        # TSETMC may return Gregorian or Jalali dates as YYYYMMDD. Keep the
-        # source representation intact so no calendar system is guessed.
         return value.replace("/", "-")
 
     def save_daily_history(self, symbol: str, source: str, observed_at: datetime, rows: list[dict[str, Any]], date_key: str = "dEven") -> int:
@@ -83,6 +81,39 @@ class SnapshotStore:
                 )
                 saved += 1
         return saved
+
+    def save_daily_history_incremental(self, symbol: str, source: str, observed_at: datetime, rows: list[dict[str, Any]], date_key: str = "dEven") -> dict[str, int]:
+        """Store only new dates while refreshing existing dates when their payload changed."""
+        observed_at = observed_at.astimezone(timezone.utc)
+        inserted = 0
+        updated = 0
+        skipped = 0
+        with self._connect() as con:
+            for row in rows:
+                market_date = self._market_date(row, date_key)
+                if market_date is None:
+                    skipped += 1
+                    continue
+                payload = json.dumps(row, ensure_ascii=False, sort_keys=True)
+                existing = con.execute(
+                    "SELECT payload FROM daily_history WHERE symbol=? AND source=? AND market_date=?",
+                    (symbol, source, market_date),
+                ).fetchone()
+                if existing is None:
+                    con.execute(
+                        "INSERT INTO daily_history(symbol, source, market_date, payload, observed_at) VALUES (?, ?, ?, ?, ?)",
+                        (symbol, source, market_date, payload, observed_at.isoformat()),
+                    )
+                    inserted += 1
+                elif existing[0] != payload:
+                    con.execute(
+                        "UPDATE daily_history SET payload=?, observed_at=? WHERE symbol=? AND source=? AND market_date=?",
+                        (payload, observed_at.isoformat(), symbol, source, market_date),
+                    )
+                    updated += 1
+                else:
+                    skipped += 1
+        return {"inserted": inserted, "updated": updated, "skipped": skipped}
 
     def history(self, symbol: str, source: str | None = None, limit: int | None = None) -> list[dict[str, Any]]:
         query = "SELECT symbol, source, market_date, observed_at, payload FROM daily_history WHERE symbol=?"
