@@ -1,14 +1,14 @@
 {
   "request_id": "example-001",
   "status": "success",
-  "completed_at": "2026-08-16T05:20:49.679116+00:00",
+  "completed_at": "2026-08-16T05:55:40.740087+00:00",
   "action": "fetch_tsetmc",
   "symbol": "عیار",
   "data": {
     "symbol": "عیار",
     "ins_code": "34144395039913458",
     "source": "tsetmc",
-    "observed_at": "2026-08-16T05:20:49.415264+00:00",
+    "observed_at": "2026-08-16T05:55:40.452470+00:00",
     "history_rows": 1967,
     "historical_rows_saved": 1967,
     "history_coverage": {
