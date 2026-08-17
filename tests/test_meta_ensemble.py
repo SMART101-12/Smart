@@ -3,8 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from smart.meta_ensemble import compare_legacy, evaluate, walk_forward
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,24 +21,18 @@ def load_rows(symbol: str) -> list[dict]:
     return [rows[key] for key in sorted(rows)]
 
 
-@pytest.mark.parametrize("symbol", SYMBOLS)
-def test_meta_ensemble_has_enough_history(symbol: str):
-    rows = load_rows(symbol)
-    assert len(rows) >= 100, f"{symbol}: insufficient history: {len(rows)}"
-    predictions = walk_forward(rows)
-    metrics = evaluate(predictions)
-    baseline = compare_legacy(rows)
-    print(json.dumps({"symbol": symbol, "meta": metrics, "legacy": baseline}, ensure_ascii=False))
-    assert metrics["predictions"] > 0
-    assert metrics["signals"] > 0
-    assert metrics["accuracy"] is not None
-
-
-def test_meta_ensemble_report_is_comparable():
+def test_meta_ensemble_comparison_palayesh_foulad():
     report = {}
     for symbol in SYMBOLS:
         rows = load_rows(symbol)
-        predictions = walk_forward(rows)
-        report[symbol] = {"meta": evaluate(predictions), "legacy": compare_legacy(rows)}
+        assert len(rows) >= 100, f"{symbol}: insufficient history: {len(rows)}"
+        # Keep the validation window large enough to cover many regimes while
+        # keeping CI runtime bounded. The stored Git history remains intact.
+        validation_rows = rows[-1500:]
+        predictions = walk_forward(validation_rows)
+        report[symbol] = {"meta": evaluate(predictions), "legacy": compare_legacy(validation_rows)}
+        assert report[symbol]["meta"]["predictions"] > 0
+        assert report[symbol]["meta"]["signals"] > 0
+        assert report[symbol]["meta"]["accuracy"] is not None
+        assert report[symbol]["meta"]["brier"] is not None
     print(json.dumps(report, ensure_ascii=False, indent=2))
-    assert all(report[symbol]["meta"]["brier"] is not None for symbol in SYMBOLS)
