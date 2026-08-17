@@ -2,7 +2,7 @@ name: SMART tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, agent/data-gap-recovery]
   pull_request:
 
 jobs:
