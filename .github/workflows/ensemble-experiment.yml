@@ -1,4 +1,4 @@
-name: SMART 200-indicator ensemble experiment
+name: SMART model experiments
 
 on:
   push:
@@ -9,19 +9,21 @@ permissions:
   contents: write
 
 jobs:
-  ensemble:
+  experiments:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Run ensemble experiment
+      - name: Run 200-indicator ensemble experiment
         run: PYTHONPATH=src python scripts/run_ensemble_experiments.py
-      - name: Persist leaderboard
+      - name: Run custom model experiment
+        run: PYTHONPATH=src python scripts/run_custom_model.py
+      - name: Persist experiment results
         run: |
-          git config user.name 'SMART Ensemble Experiment Bot'
+          git config user.name 'SMART Experiment Bot'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add runtime/experiments/پالایش/indicator_ensemble_results.json
-          git diff --cached --quiet || git commit -m 'experiment: persist 200-indicator ensemble leaderboard [skip ci]'
+          git add runtime/experiments/پالایش/indicator_ensemble_results.json runtime/experiments/پالایش/custom_model_v1_results.json
+          git diff --cached --quiet || git commit -m 'experiment: persist SMART model results [skip ci]'
           git push
