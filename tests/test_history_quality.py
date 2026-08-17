@@ -18,7 +18,8 @@ def test_calendar_classifies_weekly_and_official_closures():
 
 def test_zero_trade_records_are_not_called_missing():
     result = audit_symbol("فولاد", start=START, end=END)
-    assert "2026-08-05" not in result["zero_trade_records"]
+    assert "2026-08-05" in result["zero_trade_records"]
+    assert "2026-08-05" not in result["missing_expected"]
     assert result["classification"]["DATA_PRESENT"] == 10
 
 
