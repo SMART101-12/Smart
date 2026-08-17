@@ -1,55 +1,209 @@
-"""TSETMC adapter for the Iran-side SMART agent."""
+"""TSETMC adapter for the Iran-side SMART agent.
+
+Uses the community-documented cdn.tsetmc.com JSON endpoints. Network calls
+run from the user's Windows/Iran connection. Collection persists both the
+raw snapshot and every daily historical record for later analysis.
+"""
+
 from __future__ import annotations
+
 import time
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote
+
 import requests
+
 from .snapshot_store import SnapshotStore
-BASE_URL="https://cdn.tsetmc.com/api"
-HEADERS={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151 Safari/537.36","Accept":"application/json, text/plain, */*","Referer":"https://www.tsetmc.ir/"}
-RETRYABLE_STATUS={408,425,429,500,502,503,504}
+
+BASE_URL = "https://cdn.tsetmc.com/api"
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Referer": "https://www.tsetmc.ir/",
+}
+RETRYABLE_STATUS = {408, 425, 429, 500, 502, 503, 504}
+
+
 class TsetmcAdapter:
-    def __init__(self,store:SnapshotStore|None=None,timeout:int=20,retries:int=3)->None:
-        self.store=store or SnapshotStore(); self.timeout=timeout; self.retries=retries; self.session=requests.Session(); self.session.headers.update(HEADERS)
-    def _get(self,path:str)->Any:
-        url=f"{BASE_URL}/{path.lstrip('/')}"; last_error=None
-        for attempt in range(1,self.retries+1):
+    def __init__(self, store: SnapshotStore | None = None, timeout: int = 20, retries: int = 3) -> None:
+        self.store = store or SnapshotStore()
+        self.timeout = timeout
+        self.retries = retries
+        self.session = requests.Session()
+        self.session.headers.update(HEADERS)
+
+    def _get(self, path: str) -> Any:
+        url = f"{BASE_URL}/{path.lstrip('/')}"
+        last_error: Exception | None = None
+        for attempt in range(1, self.retries + 1):
             try:
-                r=self.session.get(url,timeout=self.timeout)
-                if r.status_code in RETRYABLE_STATUS and attempt<self.retries: time.sleep(1.5*attempt); continue
-                r.raise_for_status()
-                if "text/html" in r.headers.get("content-type","").lower(): raise RuntimeError("TSETMC returned HTML instead of JSON; access may be blocked.")
-                return r.json()
-            except (requests.RequestException,ValueError,RuntimeError) as exc:
-                last_error=exc
-                if attempt<self.retries: time.sleep(1.5*attempt); continue
+                response = self.session.get(url, timeout=self.timeout)
+                if response.status_code in RETRYABLE_STATUS and attempt < self.retries:
+                    time.sleep(1.5 * attempt)
+                    continue
+                response.raise_for_status()
+                if "text/html" in response.headers.get("content-type", "").lower():
+                    raise RuntimeError("TSETMC returned HTML instead of JSON; access may be blocked.")
+                return response.json()
+            except (requests.RequestException, ValueError, RuntimeError) as exc:
+                last_error = exc
+                if attempt < self.retries:
+                    time.sleep(1.5 * attempt)
+                    continue
+                break
         raise RuntimeError(f"TSETMC request failed after {self.retries} attempts: {url}: {last_error}") from last_error
-    def search(self,query:str)->list[dict[str,Any]]:
-        data=self._get(f"Instrument/GetInstrumentSearch/{quote(query,safe='')}"); return data.get("instrumentSearch",[]) if isinstance(data,dict) else []
-    def resolve_symbol(self,symbol:str)->dict[str,Any]:
-        rows=self.search(symbol); exact=[r for r in rows if r.get("lVal18AFC")==symbol or r.get("lVal30")==symbol]; row=(exact or rows)[0] if (exact or rows) else None
-        if not row or not row.get("insCode"): raise RuntimeError(f"Symbol not found on TSETMC: {symbol}")
-        return row
-    def closing_price(self,ins_code:str)->dict[str,Any]:
-        data=self._get(f"ClosingPrice/GetClosingPriceInfo/{ins_code}"); return data.get("closingPriceInfo",data) if isinstance(data,dict) else data
-    def closing_price_daily(self,ins_code:str,deven:str|int)->dict[str,Any]|None:
-        data=self._get(f"ClosingPrice/GetClosingPriceDaily/{ins_code}/{deven}")
-        return data.get("closingPriceDaily",data) if isinstance(data,dict) else data
-    def instrument_calendar(self,ins_code:str)->list[dict[str,Any]]:
-        data=self._get(f"ClosingPrice/GetInstrumentCalendar/{ins_code}")
-        rows=data.get("instrumentCalendar",[]) if isinstance(data,dict) else data
-        return rows if isinstance(rows,list) else []
-    def client_type(self,ins_code:str)->dict[str,Any]:
-        data=self._get(f"ClientType/GetClientType/{ins_code}/1/0"); return data.get("clientType",data) if isinstance(data,dict) else data
-    def daily_history(self,ins_code:str,top:int=0)->list[dict[str,Any]]:
-        data=self._get(f"ClosingPrice/GetClosingPriceDailyList/{ins_code}/{top}"); return data.get("closingPriceDaily",[]) if isinstance(data,dict) else data
-    def collect_symbol(self,symbol:str)->dict[str,Any]:
-        instrument=self.resolve_symbol(symbol); ins_code=str(instrument["insCode"]); observed_at=datetime.now(timezone.utc); errors=[]; history=self.daily_history(ins_code,0)
-        try: closing=self.closing_price(ins_code)
-        except Exception as exc: closing=None; errors.append({"component":"closing_price","error":str(exc)})
-        try: clients=self.client_type(ins_code)
-        except Exception as exc: clients=None; errors.append({"component":"client_type","error":str(exc)})
-        payload={"instrument":instrument,"closing_price":closing,"client_type":clients,"daily_history":history,"ins_code":ins_code,"requested_symbol":symbol,"collection_errors":errors,"data_quality":"partial" if errors else "complete"}
-        self.store.save(symbol,"tsetmc",observed_at,payload); hp=self.store.save_daily_history_incremental(symbol,"tsetmc",observed_at,history); cov=self.store.history_coverage(symbol,"tsetmc")
-        return {"symbol":symbol,"ins_code":ins_code,"source":"tsetmc","observed_at":observed_at.isoformat(),"history_rows":len(history),"history_persistence":hp,"history_coverage":cov,"latest_history":history[0] if history else None,"oldest_history":history[-1] if history else None,"collection_errors":errors,"data_quality":"partial" if errors else "complete","payload":payload}
+
+    def search(self, query: str) -> list[dict[str, Any]]:
+        data = self._get(f"Instrument/GetInstrumentSearch/{quote(query, safe='')}")
+        return data.get("instrumentSearch", []) if isinstance(data, dict) else []
+
+    @staticmethod
+    def _is_derivative_or_non_primary(row: dict[str, Any]) -> bool:
+        """Return True for instruments that should not win primary-symbol resolution."""
+        ticker = str(row.get("lVal18AFC") or "")
+        name = str(row.get("lVal30") or "")
+        category = str(row.get("cgrValCot") or "").upper()
+
+        # حق تقدم: TSETMC normally appends "ح" to the primary ticker.
+        if ticker.endswith("ح") or name.startswith("ح .") or name.startswith("ح."):
+            return True
+        # Options / derivatives have flow=3 in the current TSETMC instrument search.
+        if row.get("flow") == 3 or category.startswith("3"):
+            return True
+        # Debt / financing instruments should not be selected for stock/ETF analysis.
+        if category in {"17", "16", "OT", "QD"}:
+            return True
+        if "اختيار" in name or "مرابحه" in name or "سلف " in name:
+            return True
+        return False
+
+    @classmethod
+    def _rank_search_results(cls, symbol: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Rank search results deterministically, with exact primary instruments first."""
+        query = str(symbol or "").strip()
+        ranked: list[tuple[int, int, dict[str, Any]]] = []
+
+        for index, row in enumerate(rows):
+            ticker = str(row.get("lVal18AFC") or "").strip()
+            name = str(row.get("lVal30") or "").strip()
+            flow = row.get("flow")
+            non_primary = cls._is_derivative_or_non_primary(row)
+
+            score = 0
+            if ticker == query:
+                score += 1000
+            if name == query:
+                score += 950
+            if ticker and query and ticker.replace(" ", "") == query.replace(" ", ""):
+                score += 100
+            if query and query in name:
+                score += 40
+            if query and query in ticker:
+                score += 30
+
+            # Prefer normal equity/ETF market instruments over other flows.
+            if flow in {1, 2}:
+                score += 50
+            if row.get("sourceID") == 1:
+                score += 10
+            if non_primary:
+                score -= 10000
+
+            # Stable tie-breaker: preserve TSETMC result order.
+            ranked.append((score, -index, row))
+
+        ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        return [item[2] for item in ranked]
+
+    def resolve_symbol(self, symbol: str) -> dict[str, Any]:
+        """Resolve a user symbol to one deterministic primary TSETMC instrument.
+
+        Exact ticker/name matches always beat fuzzy matches. Rights, options,
+        debt/financing instruments and other derivatives are excluded from
+        winning resolution. The selected row includes resolver metadata so
+        downstream history/analysis can audit why that instrument was chosen.
+        """
+        query = str(symbol or "").strip()
+        if not query:
+            raise RuntimeError("Symbol must not be empty")
+
+        rows = self.search(query)
+        ranked = self._rank_search_results(query, rows)
+        if not ranked:
+            raise RuntimeError(f"Symbol not found on TSETMC: {query}")
+
+        primary = ranked[0]
+        if not primary.get("insCode") or self._is_derivative_or_non_primary(primary):
+            raise RuntimeError(f"No primary tradable instrument found on TSETMC: {query}")
+
+        resolved = dict(primary)
+        resolved["resolver"] = {
+            "requested_symbol": query,
+            "match": "exact_ticker" if resolved.get("lVal18AFC") == query else (
+                "exact_name" if resolved.get("lVal30") == query else "ranked_search"
+            ),
+            "candidate_count": len(rows),
+            "excluded_candidate_count": sum(self._is_derivative_or_non_primary(row) for row in rows),
+        }
+        return resolved
+
+    def closing_price(self, ins_code: str) -> dict[str, Any]:
+        data = self._get(f"ClosingPrice/GetClosingPriceInfo/{ins_code}")
+        return data.get("closingPriceInfo", data) if isinstance(data, dict) else data
+
+    def client_type(self, ins_code: str) -> dict[str, Any]:
+        data = self._get(f"ClientType/GetClientType/{ins_code}/1/0")
+        return data.get("clientType", data) if isinstance(data, dict) else data
+
+    def daily_history(self, ins_code: str, top: int = 0) -> list[dict[str, Any]]:
+        data = self._get(f"ClosingPrice/GetClosingPriceDailyList/{ins_code}/{top}")
+        return data.get("closingPriceDaily", []) if isinstance(data, dict) else data
+
+    def collect_symbol(self, symbol: str) -> dict[str, Any]:
+        instrument = self.resolve_symbol(symbol)
+        ins_code = str(instrument["insCode"])
+        observed_at = datetime.now(timezone.utc)
+        errors: list[dict[str, str]] = []
+
+        history = self.daily_history(ins_code, 0)
+
+        try:
+            closing = self.closing_price(ins_code)
+        except Exception as exc:
+            closing = None
+            errors.append({"component": "closing_price", "error": str(exc)})
+
+        try:
+            clients = self.client_type(ins_code)
+        except Exception as exc:
+            clients = None
+            errors.append({"component": "client_type", "error": str(exc)})
+
+        payload = {
+            "instrument": instrument,
+            "closing_price": closing,
+            "client_type": clients,
+            "daily_history": history,
+            "ins_code": ins_code,
+            "requested_symbol": symbol,
+            "collection_errors": errors,
+            "data_quality": "partial" if errors else "complete",
+        }
+        self.store.save(symbol, "tsetmc", observed_at, payload)
+        history_persistence = self.store.save_daily_history_incremental(symbol, "tsetmc", observed_at, history)
+        coverage = self.store.history_coverage(symbol, "tsetmc")
+        return {
+            "symbol": symbol,
+            "ins_code": ins_code,
+            "source": "tsetmc",
+            "observed_at": observed_at.isoformat(),
+            "history_rows": len(history),
+            "history_persistence": history_persistence,
+            "history_coverage": coverage,
+            "latest_history": history[0] if history else None,
+            "oldest_history": history[-1] if history else None,
+            "collection_errors": errors,
+            "data_quality": "partial" if errors else "complete",
+            "payload": payload,
+        }
