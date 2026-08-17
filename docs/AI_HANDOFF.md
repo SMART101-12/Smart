@@ -2,6 +2,14 @@
 
 این فایل یک قرارداد عملیاتی برای هوش مصنوعی بعدی است.
 
+## AI training layer
+برای آموزش منطق پروژه و ادامه بدون نیاز به تاریخچه چت، ابتدا این بخش مستقل را بخوان:
+1. `AI_TRAINING/README.md`
+2. `AI_TRAINING/SMART_LOGIC.md`
+3. `AI_TRAINING/DAILY_AI_PROTOCOL.md`
+
+سپس وضعیت پروژه را از `docs/SMART_PROJECT_STATE_2026-08-17.md` (یا جدیدترین فایل state) بخوان.
+
 ## پروژه چیست؟
 SMART یک موتور تحلیل و تصمیم‌یار بازار ایران است. هدف، پیش‌بینی روزانه و سپس ساخت Entry/Exit بر اساس شواهد قابل بک‌تست است.
 
@@ -16,6 +24,7 @@ SMART یک موتور تحلیل و تصمیم‌یار بازار ایران ا
 4. `docs/LEARNING_MEMORY_PROTOCOL.md`
 5. `docs/FINAL_MODEL_ROADMAP.md`
 6. `docs/EXPERIMENT_RESULTS.md`
+7. `docs/MODEL_COMPARISON_2026-08-17.md` یا جدیدترین comparison
 
 سپس آخرین CI، آخرین commit و آخرین artifactهای `runtime/experiments` را بررسی کن.
 
@@ -34,6 +43,8 @@ SMART یک موتور تحلیل و تصمیم‌یار بازار ایران ا
 - Walk-Forward
 - Frozen Out-of-Sample
 - learning memory برای موفقیت و شکست
+- research-driven Market Intelligence
+- توسعه لایه Data Entry به تفکیک گروه‌های بورسی، با شروع گروه فلزات اساسی
 
 ## نحوه کار
 `Observe → Predict → Record → Reveal Actual → Diagnose Error → Learn → Next Day`
@@ -45,6 +56,7 @@ SMART یک موتور تحلیل و تصمیم‌یار بازار ایران ا
 - ادعای عملکرد بدون artifact
 - تغییر مدل بدون version/experiment record
 - گزارش «بهتر شد» بدون مقایسه عددی با baseline
+- استفاده از قیمت خارج از Git در آزمایشی که صراحتاً بر مبنای Git تعریف شده است
 
 ## خروجی هر مرحله
 باید شامل باشد:
@@ -59,7 +71,7 @@ SMART یک موتور تحلیل و تصمیم‌یار بازار ایران ا
 - خطای اصلی
 - اصلاح
 - اثر اصلاح
-- Promote/Reject
+- Promote/Reject/Hold
 
 ## نقش هوش مصنوعی
 هوش مصنوعی باید مانند مدیر تحقیق و توسعه کمی عمل کند: فرضیه بسازد، آزمایش کند، شکست را ثبت کند، از شکست یاد بگیرد و فقط مدل‌هایی را ارتقا دهد که در داده ندیده نیز شواهد کافی دارند.
