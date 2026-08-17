@@ -27,6 +27,7 @@ def test_tsetmc_adapter_collection_contract(monkeypatch, tmp_path):
     }
 
     class FakeResponse:
+        status_code = 200
         headers = {"content-type": "application/json"}
 
         def __init__(self, payload):

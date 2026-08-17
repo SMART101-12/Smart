@@ -1,0 +1,23 @@
+{
+  "engine_version": "daily-prediction-v1.0",
+  "symbol": "پالایش",
+  "rows": 1425,
+  "first_date": 20200826,
+  "last_date": 20260815,
+  "prediction_count": 1394,
+  "no_lookahead": true,
+  "metrics": {
+    "direction_accuracy_pct": 50.7174,
+    "mae_pct": 1.8333,
+    "baseline_naive_mae_pct": 1.8115,
+    "mean_improvement_vs_naive_pct": -39.4886,
+    "model_beats_naive_pct": 49.5349
+  },
+  "final_weights": {
+    "naive": 0.6977731183094,
+    "sma20": 1.171240359065606e-38,
+    "ema20": 4.0487372592509846e-32,
+    "momentum5": 0.08092296207465084,
+    "trend20": 0.22130391961594914
+  }
+}
