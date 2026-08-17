@@ -3,8 +3,8 @@
   "ins_code": "67675656072510693",
   "source": "tsetmc",
   "month": "202303",
-  "exported_at": "2026-08-16T07:05:12.647953+00:00",
-  "rows": 16,
+  "exported_at": "2026-08-16T09:33:43.830152+00:00",
+  "rows": 17,
   "fields_note": "dEven=YYYYMMDD, pClosing=closing price, pDrCotVal=last/traded price, qTotTran5J=volume, qTotCap=trade value, zTotTran=trade count.",
   "daily_history": [
     {
@@ -44,6 +44,25 @@
       "zTotTran": 15822.0,
       "qTotTran5J": 11767485.0,
       "qTotCap": 2112180650960.0
+    },
+    {
+      "priceChange": 2380.0,
+      "priceMin": 172250.0,
+      "priceMax": 181000.0,
+      "priceYesterday": 175230.0,
+      "priceFirst": 173900.0,
+      "last": false,
+      "id": 0,
+      "insCode": "67675656072510693",
+      "dEven": 20230327,
+      "hEven": 122959,
+      "pClosing": 177970.0,
+      "iClose": false,
+      "yClose": true,
+      "pDrCotVal": 177610.0,
+      "zTotTran": 17016.0,
+      "qTotTran5J": 14552856.0,
+      "qTotCap": 2589972122920.0
     },
     {
       "priceChange": 5890.0,
