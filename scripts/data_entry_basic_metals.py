@@ -1,15 +1,16 @@
 """Incremental historical Data Entry for Iran Basic Metals equities.
 
-Usage:
-    PYTHONPATH=src python scripts/data_entry_basic_metals.py
-    PYTHONPATH=src python scripts/data_entry_basic_metals.py --top 1000
+Usage from repository root:
+    $env:PYTHONPATH = ".\src"
+    .\.venv\Scripts\python.exe scripts\data_entry_basic_metals.py --top 1000
 
 The job:
 - uses the existing SMART TSETMC adapter;
 - keeps the symbol universe in one auditable list;
 - verifies the instrument's industry metadata when available;
 - stores daily history in the existing SQLite SnapshotStore;
-- upserts by (symbol, source, market_date), so reruns do not duplicate rows;
+- writes a Git-tracked JSON history file for each symbol;
+- upserts by market date, so reruns do not duplicate rows;
 - writes a JSON run report under data/data_entry/basic_metals/.
 
 No price values are hard-coded. TSETMC is the source used by this ingestion job.
@@ -25,7 +26,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-# Make `python scripts/...py` work from the repository root.
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
@@ -36,9 +36,6 @@ from smart.tsetmc import TSETMCError, daily_history, instrument_info, search_sym
 SOURCE = "TSETMC"
 INDUSTRY_NAME = "فلزات اساسی"
 
-# Universe prepared for the first Basic Metals ingestion pass.
-# The ingestion validates industry metadata and reports any symbol that does
-# not match, rather than silently storing a wrong-sector instrument.
 BASIC_METALS_SYMBOLS = [
     "فملی", "فولاد", "فخوز", "ذوب", "فایرا", "فاسمین", "فزرین",
     "فرآور", "فروس", "فزر", "فجهان", "فسبزوار", "فصبا", "فخاس",
@@ -64,12 +61,28 @@ def _flatten_strings(value: Any) -> list[str]:
 
 
 def _industry_matches(info: dict[str, Any]) -> bool | None:
-    """Return True/False when metadata is available, otherwise None."""
     values = _flatten_strings(info)
     if not values:
         return None
     normalized = " ".join(values).replace("ي", "ی").replace("ك", "ک")
-    return INDUSTRY_NAME in normalized or "Basic Metals".lower() in normalized.lower()
+    return INDUSTRY_NAME in normalized or "basic metals" in normalized.lower()
+
+
+def _write_git_history(symbol: str, rows: list[dict[str, Any]], ins_code: str, industry_match: bool | None) -> None:
+    out_dir = ROOT / "data" / "data_entry" / "basic_metals" / "history"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "symbol": symbol,
+        "ins_code": ins_code,
+        "industry": INDUSTRY_NAME,
+        "industry_match": industry_match,
+        "source": SOURCE,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "rows": rows,
+    }
+    (out_dir / f"{symbol}.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
 async def ingest_symbol(symbol: str, store: SnapshotStore, top: int) -> dict[str, Any]:
@@ -82,12 +95,7 @@ async def ingest_symbol(symbol: str, store: SnapshotStore, top: int) -> dict[str
         info = await instrument_info(ins_code)
         industry_match = _industry_matches(info)
         if industry_match is False:
-            return {
-                "symbol": symbol,
-                "status": "industry_mismatch",
-                "ins_code": ins_code,
-                "industry_match": False,
-            }
+            return {"symbol": symbol, "status": "industry_mismatch", "ins_code": ins_code}
 
         rows = await daily_history(ins_code, top=top)
         now = datetime.now(timezone.utc)
@@ -98,7 +106,7 @@ async def ingest_symbol(symbol: str, store: SnapshotStore, top: int) -> dict[str
             rows=rows,
             date_key="dEven",
         )
-        coverage = store.history_coverage(symbol, SOURCE)
+        _write_git_history(symbol, rows, ins_code, industry_match)
         return {
             "symbol": symbol,
             "status": "ok",
@@ -106,9 +114,9 @@ async def ingest_symbol(symbol: str, store: SnapshotStore, top: int) -> dict[str
             "industry_match": industry_match,
             "fetched_rows": len(rows),
             **result,
-            "coverage": coverage,
+            "coverage": store.history_coverage(symbol, SOURCE),
         }
-    except Exception as exc:  # keep the batch running if one symbol fails
+    except Exception as exc:
         return {"symbol": symbol, "status": "error", "error": str(exc)}
 
 
