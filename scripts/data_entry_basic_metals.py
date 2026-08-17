@@ -1,19 +1,12 @@
 """Incremental historical Data Entry for Iran Basic Metals equities.
 
-Usage from repository root:
+Run from repository root:
     $env:PYTHONPATH = ".\src"
     .\.venv\Scripts\python.exe scripts\data_entry_basic_metals.py --top 1000
 
-The job:
-- uses the existing SMART TSETMC adapter;
-- keeps the symbol universe in one auditable list;
-- verifies the instrument's industry metadata when available;
-- stores daily history in the existing SQLite SnapshotStore;
-- writes a Git-tracked JSON history file for each symbol;
-- upserts by market date, so reruns do not duplicate rows;
-- writes a JSON run report under data/data_entry/basic_metals/.
-
-No price values are hard-coded. TSETMC is the source used by this ingestion job.
+The job uses the existing SMART TSETMC adapter and SnapshotStore. It retries
+TSETMC history requests, keeps per-symbol Git JSON history, and never writes
+hard-coded market prices.
 """
 
 from __future__ import annotations
@@ -45,27 +38,58 @@ BASIC_METALS_SYMBOLS = [
     "فوکا", "کمنگنز", "کرومیت", "کدما",
 ]
 
+RETRY_DELAYS = (2, 5, 10)
+RETRY_TOPS = (1000, 500, 200)
 
-def _flatten_strings(value: Any) -> list[str]:
-    out: list[str] = []
+
+def _normalize(value: Any) -> str:
+    return str(value).strip().replace("ي", "ی").replace("ك", "ک")
+
+
+def _collect_industry_values(value: Any, out: list[str]) -> None:
     if isinstance(value, dict):
         for key, item in value.items():
-            if "industry" in str(key).lower() or "group" in str(key).lower() or "صنعت" in str(key):
+            key_text = _normalize(key).lower()
+            if any(token in key_text for token in ("industry", "group", "industryname", "گروه", "صنعت")):
                 if isinstance(item, (str, int, float)):
-                    out.append(str(item))
-            out.extend(_flatten_strings(item))
+                    out.append(_normalize(item))
+            _collect_industry_values(item, out)
     elif isinstance(value, list):
         for item in value:
-            out.extend(_flatten_strings(item))
-    return out
+            _collect_industry_values(item, out)
 
 
 def _industry_matches(info: dict[str, Any]) -> bool | None:
-    values = _flatten_strings(info)
+    values: list[str] = []
+    _collect_industry_values(info, values)
     if not values:
         return None
-    normalized = " ".join(values).replace("ي", "ی").replace("ك", "ک")
-    return INDUSTRY_NAME in normalized or "basic metals" in normalized.lower()
+    joined = " | ".join(values).lower()
+    return "فلزات اساسی" in joined or "basic metals" in joined
+
+
+def _merge_rows(existing: list[dict[str, Any]], incoming: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge by market date while preserving the newest payload."""
+    merged: dict[str, dict[str, Any]] = {}
+    for row in existing + incoming:
+        raw = row.get("dEven") or row.get("date") or row.get("market_date")
+        if raw is None:
+            continue
+        key = str(raw).strip().replace("/", "-")
+        merged[key] = row
+    return [merged[key] for key in sorted(merged)]
+
+
+def _read_git_history(symbol: str) -> list[dict[str, Any]]:
+    path = ROOT / "data" / "data_entry" / "basic_metals" / "history" / f"{symbol}.json"
+    if not path.exists():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        rows = payload.get("rows", [])
+        return rows if isinstance(rows, list) else []
+    except (OSError, json.JSONDecodeError):
+        return []
 
 
 def _write_git_history(symbol: str, rows: list[dict[str, Any]], ins_code: str, industry_match: bool | None) -> None:
@@ -85,6 +109,19 @@ def _write_git_history(symbol: str, rows: list[dict[str, Any]], ins_code: str, i
     )
 
 
+async def _fetch_history_with_retry(ins_code: str, top: int) -> tuple[list[dict[str, Any]], list[str]]:
+    errors: list[str] = []
+    for index, requested_top in enumerate(RETRY_TOPS):
+        try:
+            rows = await daily_history(ins_code, top=min(top, requested_top))
+            return rows, errors
+        except Exception as exc:
+            errors.append(f"top={min(top, requested_top)}: {exc}")
+            if index < len(RETRY_DELAYS):
+                await asyncio.sleep(RETRY_DELAYS[index])
+    raise TSETMCError("; ".join(errors))
+
+
 async def ingest_symbol(symbol: str, store: SnapshotStore, top: int) -> dict[str, Any]:
     try:
         found = await search_symbol(symbol)
@@ -95,25 +132,37 @@ async def ingest_symbol(symbol: str, store: SnapshotStore, top: int) -> dict[str
         info = await instrument_info(ins_code)
         industry_match = _industry_matches(info)
         if industry_match is False:
-            return {"symbol": symbol, "status": "industry_mismatch", "ins_code": ins_code}
+            return {
+                "symbol": symbol,
+                "status": "industry_mismatch",
+                "ins_code": ins_code,
+                "industry_match": False,
+            }
 
-        rows = await daily_history(ins_code, top=top)
+        rows, retry_errors = await _fetch_history_with_retry(ins_code, top)
         now = datetime.now(timezone.utc)
-        result = store.save_daily_history_incremental(
+        db_result = store.save_daily_history_incremental(
             symbol=symbol,
             source=SOURCE,
             observed_at=now,
             rows=rows,
             date_key="dEven",
         )
-        _write_git_history(symbol, rows, ins_code, industry_match)
+
+        existing = _read_git_history(symbol)
+        merged = _merge_rows(existing, rows)
+        _write_git_history(symbol, merged, ins_code, industry_match)
+
         return {
             "symbol": symbol,
             "status": "ok",
             "ins_code": ins_code,
             "industry_match": industry_match,
             "fetched_rows": len(rows),
-            **result,
+            "git_rows": len(merged),
+            "retry_count": len(retry_errors),
+            "retry_errors": retry_errors,
+            **db_result,
             "coverage": store.history_coverage(symbol, SOURCE),
         }
     except Exception as exc:
