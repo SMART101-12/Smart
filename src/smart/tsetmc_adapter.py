@@ -58,13 +58,95 @@ class TsetmcAdapter:
         data = self._get(f"Instrument/GetInstrumentSearch/{quote(query, safe='')}")
         return data.get("instrumentSearch", []) if isinstance(data, dict) else []
 
+    @staticmethod
+    def _is_derivative_or_non_primary(row: dict[str, Any]) -> bool:
+        """Return True for instruments that should not win primary-symbol resolution."""
+        ticker = str(row.get("lVal18AFC") or "")
+        name = str(row.get("lVal30") or "")
+        category = str(row.get("cgrValCot") or "").upper()
+
+        # حق تقدم: TSETMC normally appends "ح" to the primary ticker.
+        if ticker.endswith("ح") or name.startswith("ح .") or name.startswith("ح."):
+            return True
+        # Options / derivatives have flow=3 in the current TSETMC instrument search.
+        if row.get("flow") == 3 or category.startswith("3"):
+            return True
+        # Debt / financing instruments should not be selected for stock/ETF analysis.
+        if category in {"17", "16", "OT", "QD"}:
+            return True
+        if "اختيار" in name or "مرابحه" in name or "سلف " in name:
+            return True
+        return False
+
+    @classmethod
+    def _rank_search_results(cls, symbol: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Rank search results deterministically, with exact primary instruments first."""
+        query = str(symbol or "").strip()
+        ranked: list[tuple[int, int, dict[str, Any]]] = []
+
+        for index, row in enumerate(rows):
+            ticker = str(row.get("lVal18AFC") or "").strip()
+            name = str(row.get("lVal30") or "").strip()
+            flow = row.get("flow")
+            non_primary = cls._is_derivative_or_non_primary(row)
+
+            score = 0
+            if ticker == query:
+                score += 1000
+            if name == query:
+                score += 950
+            if ticker and query and ticker.replace(" ", "") == query.replace(" ", ""):
+                score += 100
+            if query and query in name:
+                score += 40
+            if query and query in ticker:
+                score += 30
+
+            # Prefer normal equity/ETF market instruments over other flows.
+            if flow in {1, 2}:
+                score += 50
+            if row.get("sourceID") == 1:
+                score += 10
+            if non_primary:
+                score -= 10000
+
+            # Stable tie-breaker: preserve TSETMC result order.
+            ranked.append((score, -index, row))
+
+        ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        return [item[2] for item in ranked]
+
     def resolve_symbol(self, symbol: str) -> dict[str, Any]:
-        rows = self.search(symbol)
-        exact = [row for row in rows if row.get("lVal18AFC") == symbol or row.get("lVal30") == symbol]
-        row = (exact or rows)[0] if (exact or rows) else None
-        if not row or not row.get("insCode"):
-            raise RuntimeError(f"Symbol not found on TSETMC: {symbol}")
-        return row
+        """Resolve a user symbol to one deterministic primary TSETMC instrument.
+
+        Exact ticker/name matches always beat fuzzy matches. Rights, options,
+        debt/financing instruments and other derivatives are excluded from
+        winning resolution. The selected row includes resolver metadata so
+        downstream history/analysis can audit why that instrument was chosen.
+        """
+        query = str(symbol or "").strip()
+        if not query:
+            raise RuntimeError("Symbol must not be empty")
+
+        rows = self.search(query)
+        ranked = self._rank_search_results(query, rows)
+        if not ranked:
+            raise RuntimeError(f"Symbol not found on TSETMC: {query}")
+
+        primary = ranked[0]
+        if not primary.get("insCode") or self._is_derivative_or_non_primary(primary):
+            raise RuntimeError(f"No primary tradable instrument found on TSETMC: {query}")
+
+        resolved = dict(primary)
+        resolved["resolver"] = {
+            "requested_symbol": query,
+            "match": "exact_ticker" if resolved.get("lVal18AFC") == query else (
+                "exact_name" if resolved.get("lVal30") == query else "ranked_search"
+            ),
+            "candidate_count": len(rows),
+            "excluded_candidate_count": sum(self._is_derivative_or_non_primary(row) for row in rows),
+        }
+        return resolved
 
     def closing_price(self, ins_code: str) -> dict[str, Any]:
         data = self._get(f"ClosingPrice/GetClosingPriceInfo/{ins_code}")
