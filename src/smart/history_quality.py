@@ -83,7 +83,7 @@ def audit_symbol(symbol: str, *, start: date | None = None, end: date | None = N
     closed = _closed_dates(start, end, market_type)
     candidates = _candidate_dates(start, end)
     expected = candidates - closed
-    present = set(rows)
+    present = {d for d in rows if start <= d <= end}
     zero_trade = {d for d in present if float(rows[d].get("zTotTran", 0) or 0) == 0}
     missing = sorted(expected - present)
     weekly_closed = sorted(d for d in _date_range(start, end) if d.weekday() in WEEKLY_CLOSED_WEEKDAYS)
@@ -137,3 +137,4 @@ def _date_range(start: date, end: date):
     while cur <= end:
         yield cur
         cur += timedelta(days=1)
+
