@@ -69,3 +69,5 @@ Required metrics:
 - transaction-cost-aware trading test in the next layer
 
 No claim of production readiness is allowed from prediction metrics alone.
+
+Implementation status: code committed; GitHub Actions test is the source of truth for final numeric results.
