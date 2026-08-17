@@ -1,8 +1,8 @@
 {
   "engine_version": "market-intelligence-v1.0",
   "symbol": "پالایش",
-  "rows": 1425,
-  "samples": 1224,
+  "rows": 1427,
+  "samples": 1226,
   "layers": [
     "price_trend",
     "volume",
@@ -25,23 +25,23 @@
   "no_lookahead": true,
   "validation": {
     "HGB-balanced": {
-      "mae_pct": 1.951327311853267,
-      "direction_accuracy_pct": 52.88461538461539,
-      "mean_absolute_move_error_pct": 1.951327311853267,
-      "n": 208
+      "mae_pct": 1.9441926236674032,
+      "direction_accuracy_pct": 55.50239234449761,
+      "mean_absolute_move_error_pct": 1.9441926236674032,
+      "n": 209
     },
     "HGB-conservative": {
-      "mae_pct": 1.9286275296344093,
-      "direction_accuracy_pct": 54.32692307692307,
-      "mean_absolute_move_error_pct": 1.9286275296344093,
-      "n": 208
+      "mae_pct": 1.9305904641145701,
+      "direction_accuracy_pct": 55.980861244019145,
+      "mean_absolute_move_error_pct": 1.9305904641145701,
+      "n": 209
     }
   },
   "winner": "HGB-conservative",
   "oos": {
-    "mae_pct": 1.8915115592075802,
-    "direction_accuracy_pct": 67.87330316742081,
-    "mean_absolute_move_error_pct": 1.8915115592075802,
+    "mae_pct": 1.8888501965419289,
+    "direction_accuracy_pct": 70.13574660633483,
+    "mean_absolute_move_error_pct": 1.8888501965419289,
     "n": 221
   },
   "target": {
