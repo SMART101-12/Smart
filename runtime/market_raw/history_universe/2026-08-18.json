@@ -1,0 +1,107 @@
+{
+  "source": "TSETMC",
+  "source_type": "daily_history",
+  "retrieved_at": "2026-08-18T14:04:00.523883+03:30",
+  "symbols": [
+    {
+      "symbol": "شپنا",
+      "resolved_symbol": "شپنا",
+      "ins_code": 7745894403636165,
+      "record_count": 4327,
+      "first_date": "20080629",
+      "last_date": "20260817",
+      "source_url": "https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceDailyList/7745894403636165/0",
+      "status": "ok"
+    },
+    {
+      "symbol": "شبندر",
+      "resolved_symbol": "شبندر",
+      "ins_code": 35366681030756042,
+      "record_count": 3454,
+      "first_date": "20120416",
+      "last_date": "20260817",
+      "source_url": "https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceDailyList/35366681030756042/0",
+      "status": "ok"
+    },
+    {
+      "symbol": "شتران",
+      "resolved_symbol": "شتران",
+      "ins_code": 51617145873056483,
+      "record_count": 2355,
+      "first_date": "20161027",
+      "last_date": "20260817",
+      "source_url": "https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceDailyList/51617145873056483/0",
+      "status": "ok"
+    },
+    {
+      "symbol": "فارس",
+      "resolved_symbol": "فارس",
+      "ins_code": 25244329144808274,
+      "record_count": 3237,
+      "first_date": "20130310",
+      "last_date": "20260817",
+      "source_url": "https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceDailyList/25244329144808274/0",
+      "status": "ok"
+    },
+    {
+      "symbol": "شستا",
+      "resolved_symbol": "شستا",
+      "ins_code": 2400322364771558,
+      "record_count": 1521,
+      "first_date": "20200413",
+      "last_date": "20260817",
+      "source_url": "https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceDailyList/2400322364771558/0",
+      "status": "ok"
+    },
+    {
+      "symbol": "فولاد",
+      "resolved_symbol": "فولاد",
+      "ins_code": 46348559193224090,
+      "record_count": 4620,
+      "first_date": "20070311",
+      "last_date": "20260817",
+      "source_url": "https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceDailyList/46348559193224090/0",
+      "status": "ok"
+    },
+    {
+      "symbol": "فملی",
+      "resolved_symbol": "فملي",
+      "ins_code": 35425587644337450,
+      "record_count": 4634,
+      "first_date": "20070204",
+      "last_date": "20260817",
+      "source_url": "https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceDailyList/35425587644337450/0",
+      "status": "ok"
+    },
+    {
+      "symbol": "کگل",
+      "resolved_symbol": "كگل",
+      "ins_code": 35700344742885862,
+      "record_count": 5020,
+      "first_date": "20040829",
+      "last_date": "20260817",
+      "source_url": "https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceDailyList/35700344742885862/0",
+      "status": "ok"
+    },
+    {
+      "symbol": "کچاد",
+      "resolved_symbol": "كچاد",
+      "ins_code": 18027801615184692,
+      "record_count": 5290,
+      "first_date": "20031019",
+      "last_date": "20260817",
+      "source_url": "https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceDailyList/18027801615184692/0",
+      "status": "ok"
+    },
+    {
+      "symbol": "عیار",
+      "resolved_symbol": "عيار",
+      "ins_code": 34144395039913458,
+      "record_count": 1970,
+      "first_date": "20180602",
+      "last_date": "20260817",
+      "source_url": "https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceDailyList/34144395039913458/0",
+      "status": "ok"
+    }
+  ]
+}
