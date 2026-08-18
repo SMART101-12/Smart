@@ -3,17 +3,10 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
 
-$python = Join-Path $root 'python.exe'
-$systemPython = 'C:\Users\s.nekounam\AppData\Local\Programs\Python\Python312\python.exe'
-
-if (Test-Path (Join-Path $root '.venv\Scripts\python.exe')) {
-    $candidate = Join-Path $root '.venv\Scripts\python.exe'
-    & $candidate --version *> $null
-    if ($LASTEXITCODE -eq 0) { $python = $candidate }
-}
-
-if (-not (Test-Path $python)) { $python = $systemPython }
-if (-not (Test-Path $python)) { throw 'Python 3.12 was not found.' }
+# Use the known-good system Python. The local .venv launcher has previously
+# been broken on this machine, so this command deliberately avoids it.
+$python = 'C:\Users\s.nekounam\AppData\Local\Programs\Python\Python312\python.exe'
+if (-not (Test-Path $python)) { throw "Python not found: $python" }
 
 Write-Host '=== SMART: TSETMC raw MarketWatch update ==='
 Write-Host 'Downloading raw file...'
@@ -23,7 +16,8 @@ if ($LASTEXITCODE -ne 0) { throw 'TSETMC download failed. Git was not changed.' 
 $file = Get-ChildItem 'runtime\بورس_خام\marketwatch\*.gz' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if (-not $file) { throw 'Downloaded file was not found. Git was not changed.' }
 
-git add -- "$($file.FullName.Substring($root.Length + 1))"
+$relative = $file.FullName.Substring($root.Length + 1)
+git add -- $relative
 if ($LASTEXITCODE -ne 0) { throw 'git add failed.' }
 
 git diff --cached --quiet
