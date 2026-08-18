@@ -1,4 +1,8 @@
-"""Download the raw TSETMC MarketWatch response unchanged."""
+﻿"""Download the raw TSETMC MarketWatch response unchanged.
+
+This script intentionally does NOT parse, decompress, normalize, or analyze the
+response. The exact bytes returned by TSETMC are saved for later processing.
+"""
 from __future__ import annotations
 
 import datetime as dt
@@ -17,7 +21,7 @@ def main() -> int:
     target = OUT / f"{today}.gz"
 
     req = Request(URL, headers=HEADERS)
-    with urlopen(req, timeout=60) as response:
+    with urlopen(req, timeout=45) as response:
         raw = response.read()
         content_type = response.headers.get("Content-Type", "")
         status = response.status
@@ -25,8 +29,8 @@ def main() -> int:
     if status != 200 or not raw:
         raise RuntimeError(f"TSETMC download failed: status={status}, size={len(raw)}")
 
-    # TSETMC currently returns gzip-compressed bytes despite the Excel MIME type.
-    # Keep the exact response bytes unchanged for audit/reprocessing.
+    # MarketWatch currently arrives gzip-compressed despite the Excel MIME type.
+    # Keep the bytes exactly as received; do not decompress them here.
     target.write_bytes(raw)
     print(f"OK: {target}")
     print(f"SIZE: {len(raw)} bytes")
@@ -37,3 +41,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
