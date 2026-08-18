@@ -11,3 +11,6 @@ build/
 htmlcov/
 
 data/
+
+.venv_broken/
+.venv_old/
