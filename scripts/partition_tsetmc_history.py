@@ -1,16 +1,4 @@
-"""Validate and partition one TSETMC historical series into Jalali months.
-
-Raw historical files remain untouched. This script creates small, analysis-friendly
-monthly files plus a compact validation report.
-
-Usage:
-  python scripts/partition_tsetmc_history.py --symbol شبندر
-
-Outputs:
-  runtime/market_processed/history/<symbol>/<YYYY-MM>.json
-  runtime/market_processed/history_validation/<symbol>/<YYYY-MM>.json
-  runtime/market_processed/history_validation/<symbol>/summary.json
-"""
+"""Validate and partition one TSETMC historical series into Jalali months."""
 from __future__ import annotations
 
 import argparse
@@ -52,7 +40,7 @@ def safe_symbol(symbol: str) -> str:
 
 def load_payload(symbol: str) -> tuple[Path, dict, list[dict]]:
     folder = RAW_ROOT / safe_symbol(symbol)
-    candidates = sorted((p for p in folder.glob("*.json") if p.name != ""), reverse=True)
+    candidates = sorted(folder.glob("*.json"), reverse=True)
     if not candidates:
         raise FileNotFoundError(f"No raw history JSON found for symbol={symbol}")
     source = candidates[0]
@@ -64,9 +52,7 @@ def load_payload(symbol: str) -> tuple[Path, dict, list[dict]]:
 
 
 def normalize(records: list[dict]) -> tuple[list[dict], dict]:
-    valid = []
-    invalid_dates = []
-    duplicate_dates = []
+    valid, invalid_dates, duplicate_dates = [], [], []
     seen: set[str] = set()
     for row in records:
         date_text = str(row.get("date", ""))
@@ -92,7 +78,7 @@ def normalize(records: list[dict]) -> tuple[list[dict], dict]:
         delta = (dt.date.fromisoformat(b["date_gregorian"]) - dt.date.fromisoformat(a["date_gregorian"])).days
         if delta > 7:
             large_gaps.append({"from": a["date_gregorian"], "to": b["date_gregorian"], "calendar_days": delta})
-    validation = {
+    return valid, {
         "source_record_count": len(records),
         "valid_record_count": len(valid),
         "invalid_date_count": len(invalid_dates),
@@ -103,14 +89,23 @@ def normalize(records: list[dict]) -> tuple[list[dict], dict]:
         "large_gaps_sample": large_gaps[:20],
         "status": "ok" if not invalid_dates and not duplicate_dates else "warning",
     }
-    return valid, validation
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--symbol", required=True)
+    parser.add_argument("--symbol", required=False)
+    parser.add_argument("--symbol-hex", required=False)
     args = parser.parse_args()
-    symbol = args.symbol.strip()
+    if args.symbol_hex:
+        try:
+            symbol = bytes.fromhex(args.symbol_hex).decode("utf-8")
+        except ValueError as exc:
+            raise RuntimeError("Invalid UTF-8 hex symbol") from exc
+    elif args.symbol:
+        symbol = args.symbol.strip()
+    else:
+        raise RuntimeError("A symbol is required")
+
     source, payload, records = load_payload(symbol)
     valid, validation = normalize(records)
     if not valid:
@@ -139,9 +134,7 @@ def main() -> int:
             "last_date_gregorian": month_rows[-1]["date_gregorian"],
             "records": month_rows,
         }
-        (out_folder / f"{month_key}.json").write_text(
-            json.dumps(out_payload, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        (out_folder / f"{month_key}.json").write_text(json.dumps(out_payload, ensure_ascii=False, indent=2), encoding="utf-8")
         month_summaries.append({
             "period": month_key,
             "record_count": len(month_rows),
@@ -159,23 +152,18 @@ def main() -> int:
         "month_count": len(month_summaries),
         "months": month_summaries,
     }
-    (validation_folder / "summary.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    (validation_folder / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
 
     for month in month_summaries:
         month_rows = groups[month["period"]]
-        month_validation = {
+        (validation_folder / f"{month['period']}.json").write_text(json.dumps({
             "symbol": payload.get("symbol", symbol),
             "period": month["period"],
             "record_count": len(month_rows),
             "first_date_gregorian": month_rows[0]["date_gregorian"],
             "last_date_gregorian": month_rows[-1]["date_gregorian"],
             "status": "ok",
-        }
-        (validation_folder / f"{month['period']}.json").write_text(
-            json.dumps(month_validation, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print(f"Symbol: {symbol}")
     print(f"Source: {source}")
