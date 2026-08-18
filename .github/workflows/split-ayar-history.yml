@@ -2,13 +2,9 @@ name: Split AYAR history
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'tools/split_ayar_history.py'
-      - 'runtime/market_raw/history/عیار/raw/**'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   split:
@@ -20,14 +16,14 @@ jobs:
           python-version: '3.x'
       - name: Split AYAR history
         run: python tools/split_ayar_history.py
-      - name: Commit monthly files
+      - name: Package monthly history
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add 'runtime/market_raw/history/عیار/monthly/'
-          if git diff --cached --quiet; then
-            echo 'No monthly changes.'
-          else
-            git commit -m 'Generate monthly AYAR history files'
-            git push
-          fi
+          mkdir -p artifacts/ayar-monthly
+          cp runtime/market_raw/history/عیار/monthly/*.json artifacts/ayar-monthly/
+      - name: Upload AYAR monthly history artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ayar-monthly-history
+          path: artifacts/ayar-monthly/
+          if-no-files-found: error
+          retention-days: 30
