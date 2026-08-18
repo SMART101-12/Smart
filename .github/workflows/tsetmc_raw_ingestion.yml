@@ -3,7 +3,8 @@ name: TSETMC Raw Ingestion
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 6 * * 0-4"
+    # Saturday-Wednesday, after the main market session.
+    - cron: "15 9 * * 6,0-3"
 
 permissions:
   contents: write
