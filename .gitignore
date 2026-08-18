@@ -9,3 +9,8 @@ dist/
 build/
 .coverage
 htmlcov/
+
+data/
+
+.venv_broken/
+.venv_old/
