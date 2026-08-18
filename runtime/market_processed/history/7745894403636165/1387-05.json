@@ -1,0 +1,31 @@
+{
+  "source": "TSETMC",
+  "source_type": "daily_history_monthly_partition",
+  "symbol": "شپنا",
+  "requested_symbol": "شپنا",
+  "ins_code": 7745894403636165,
+  "period": "1387-05",
+  "record_count": 1,
+  "first_date_gregorian": "2008-07-27",
+  "last_date_gregorian": "2008-07-27",
+  "records": [
+    {
+      "date": "20080727",
+      "high": 6738,
+      "low": 5800,
+      "close": 6738,
+      "last": 6738,
+      "open": 5800,
+      "previous_close": 6738,
+      "value": 3988611380,
+      "volume": 687690,
+      "trades": 2,
+      "price_change": 0.0,
+      "ins_code": 7745894403636165,
+      "date_gregorian": "2008-07-27",
+      "date_jalali": "1387-05-07",
+      "jalali_year": 1387,
+      "jalali_month": 5
+    }
+  ]
+}
