@@ -4,10 +4,10 @@ Set-Location $root
 
 Write-Host "=== SMART: partition all TSETMC historical data ==="
 
-# The repository has previously encountered broken .venv launchers that could
-# execute `python -c` but failed when launching a .py file. Therefore prefer
-# the known-good system Python for this pipeline and verify it can execute the
-# target script before changing Git state.
+# Known project lesson: this machine has had a broken .venv Python launcher that
+# could run `python -c` but failed when launching .py files. Do not pre-run the
+# partition script as a probe. Instead select an interpreter, then run the
+# partition script exactly once and inspect its exit code.
 $pythonCandidates = @(
     "C:\Users\s.nekounam\AppData\Local\Programs\Python\Python312\python.exe",
     (Join-Path $root ".venv\Scripts\python.exe")
@@ -16,20 +16,20 @@ $pythonCandidates = @(
 $python = $null
 foreach ($candidate in $pythonCandidates) {
     if (Test-Path $candidate) {
-        Write-Host "Testing Python: $candidate"
-        & $candidate "-c" "import sys; print(sys.executable)" *> $null
-        if ($LASTEXITCODE -eq 0) {
-            & $candidate "scripts\partition_all_tsetmc_history.py" *> $null
-            if ($LASTEXITCODE -eq 0) {
-                $python = $candidate
-                break
-            }
+        Write-Host "Checking Python: $candidate"
+        $probe = @(& $candidate "-c" "import sys; print(sys.executable)" 2>&1)
+        $probeExit = $LASTEXITCODE
+        if ($probeExit -eq 0) {
+            $probe | ForEach-Object { Write-Host $_ }
+            $python = $candidate
+            break
         }
+        Write-Host "Python probe failed: exit=$probeExit"
     }
 }
 
 if (-not $python) {
-    throw "No usable Python interpreter can execute scripts\partition_all_tsetmc_history.py. Git was not changed."
+    throw "No usable Python interpreter was found. Git was not changed."
 }
 
 Write-Host "Using Python: $python"
