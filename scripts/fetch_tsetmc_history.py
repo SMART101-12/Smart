@@ -1,20 +1,13 @@
 """Fetch full daily trading history from TSETMC for configured symbols.
 
-This is the historical-data stage of SMART. It is intentionally separate from
-MarketWatch, which is only a point-in-time market snapshot.
-
-Sources:
-  - TSETMC symbol search: cdn.tsetmc.com/api/Instrument/GetInstrumentSearch/{symbol}
-  - TSETMC legacy daily history: old.tsetmc.com/tsev2/data/InstTradeHistory.aspx
-  - TSETMC chart history fallback: members.tsetmc.com/tsev2/chart/data/Financial.aspx
+MarketWatch is a point-in-time snapshot. This module uses TSETMC's dedicated
+ClosingPriceDailyList endpoint so the stored series represents the instrument's
+available daily history rather than today's quote.
 
 Outputs:
-  runtime/market_raw/history/<symbol>/YYYY-MM-DD.json
-  runtime/market_raw/history/<symbol>/raw/<YYYY-MM-DD>.txt
+  runtime/market_raw/history/<symbol>/<YYYY-MM-DD>.json
+  runtime/market_raw/history/<symbol>/raw/<YYYY-MM-DD>.json
   runtime/market_raw/history_universe/<YYYY-MM-DD>.json
-
-The raw response is preserved before parsing. No external market-data source is
-used for the historical price series.
 """
 from __future__ import annotations
 
@@ -30,12 +23,12 @@ ROOT = Path(__file__).resolve().parents[1]
 SYMBOL_FILE = ROOT / "config" / "tsetmc_symbols.txt"
 OUT = ROOT / "runtime" / "market_raw" / "history"
 UNIVERSE = ROOT / "runtime" / "market_raw" / "history_universe"
-UA = "Mozilla/5.0 SMART-tsetmc-history/1.0"
+UA = "Mozilla/5.0 SMART-tsetmc-history/2.0"
 DELAY = 0.8
 
 
-def http_get(url: str, timeout: int = 60) -> bytes:
-    req = Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
+def http_get(url: str, timeout: int = 90) -> bytes:
+    req = Request(url, headers={"User-Agent": UA, "Accept": "application/json,text/plain,*/*"})
     with urlopen(req, timeout=timeout) as response:
         data = response.read()
         if not data:
@@ -65,74 +58,52 @@ def find_ins_code(symbol: str) -> tuple[int, str]:
     return code, str(candidates[0].get("lVal18AFC", symbol))
 
 
-def parse_history(text: str, ins_code: int) -> list[dict]:
-    # Legacy InstTradeHistory format is rows separated by ';' and fields by ','.
-    # Expected fields: date,pmax,pmin,pc,pl,pf,py,tval,tvol,tno.
+def _num(value, default=0):
+    try:
+        return int(float(value or default))
+    except (TypeError, ValueError):
+        return default
+
+
+def parse_daily_closing(data: dict, ins_code: int) -> list[dict]:
+    rows = data.get("closingPriceDaily", [])
     records: list[dict] = []
-    for row in text.replace("\r", "").split(";"):
-        row = row.strip()
-        if not row:
+    for row in rows:
+        date_value = row.get("dEven")
+        if date_value is None:
             continue
-        fields = [x.strip() for x in row.split(",")]
-        if len(fields) < 10 or not re.fullmatch(r"\d{8}", fields[0]):
+        date_text = str(date_value)
+        if not re.fullmatch(r"\d{8}", date_text):
             continue
-        try:
-            records.append({
-                "date": fields[0],
-                "high": int(float(fields[1] or 0)),
-                "low": int(float(fields[2] or 0)),
-                "close": int(float(fields[3] or 0)),
-                "last": int(float(fields[4] or 0)),
-                "open": int(float(fields[5] or 0)),
-                "previous_close": int(float(fields[6] or 0)),
-                "value": int(float(fields[7] or 0)),
-                "volume": int(float(fields[8] or 0)),
-                "trades": int(float(fields[9] or 0)),
-                "ins_code": ins_code,
-            })
-        except ValueError:
-            continue
+        records.append({
+            "date": date_text,
+            "high": _num(row.get("priceMax", row.get("pMax"))),
+            "low": _num(row.get("priceMin", row.get("pMin"))),
+            "close": _num(row.get("pClosing", row.get("priceClosing", row.get("pc")))),
+            "last": _num(row.get("pDrCotVal", row.get("last", row.get("pl")))),
+            "open": _num(row.get("priceFirst", row.get("pf"))),
+            "previous_close": _num(row.get("priceYesterday", row.get("py"))),
+            "value": _num(row.get("qTotCap", row.get("tval"))),
+            "volume": _num(row.get("qTotTran5J", row.get("tvol"))),
+            "trades": _num(row.get("zTotTran", row.get("tno"))),
+            "price_change": row.get("priceChange"),
+            "ins_code": ins_code,
+        })
     return records
 
 
-def fetch_history(ins_code: int) -> tuple[str, list[dict], str]:
-    # A very high Top requests the complete available legacy history.
-    url = (
-        "https://old.tsetmc.com/tsev2/data/InstTradeHistory.aspx"
-        f"?i={ins_code}&Top=99999&A=0"
-    )
+def fetch_history(ins_code: int) -> tuple[dict, list[dict], str]:
+    # Top=0 means all available daily closing-price history on this endpoint.
+    url = f"https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceDailyList/{ins_code}/0"
     raw = http_get(url).decode("utf-8-sig", errors="replace")
-    records = parse_history(raw, ins_code)
-    if records:
-        return raw, records, url
-
-    # Fallback to the chart endpoint. It provides a compact daily OHLCV series.
-    fallback = (
-        "https://members.tsetmc.com/tsev2/chart/data/Financial.aspx"
-        f"?i={ins_code}&t=ph&a=0"
-    )
-    raw2 = http_get(fallback).decode("utf-8-sig", errors="replace")
-    records2 = []
-    for row in raw2.replace("\r", "").split(";"):
-        fields = [x.strip() for x in row.split(",")]
-        if len(fields) < 7 or not re.fullmatch(r"\d{8}", fields[0]):
-            continue
-        try:
-            records2.append({
-                "date": fields[0],
-                "high": int(float(fields[1] or 0)),
-                "low": int(float(fields[2] or 0)),
-                "open": int(float(fields[3] or 0)),
-                "last": int(float(fields[4] or 0)),
-                "volume": int(float(fields[5] or 0)),
-                "close": int(float(fields[6] or 0)),
-                "ins_code": ins_code,
-            })
-        except ValueError:
-            continue
-    if not records2:
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"TSETMC history response was not JSON: {raw[:120]!r}") from exc
+    records = parse_daily_closing(data, ins_code)
+    if not records:
         raise RuntimeError(f"No historical rows returned for insCode={ins_code}")
-    return raw2, records2, fallback
+    return data, records, url
 
 
 def safe_symbol(symbol: str) -> str:
@@ -151,15 +122,18 @@ def main() -> int:
         try:
             ins_code, resolved_symbol = find_ins_code(symbol)
             time.sleep(DELAY)
-            raw, records, source_url = fetch_history(ins_code)
+            raw_data, records, source_url = fetch_history(ins_code)
             time.sleep(DELAY)
 
             folder = OUT / safe_symbol(symbol)
             folder.mkdir(parents=True, exist_ok=True)
             (folder / "raw").mkdir(parents=True, exist_ok=True)
-            (folder / "raw" / f"{today}.txt").write_text(raw, encoding="utf-8")
+            (folder / "raw" / f"{today}.json").write_text(
+                json.dumps(raw_data, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
             payload = {
                 "source": "TSETMC",
+                "source_type": "daily_history",
                 "symbol": resolved_symbol,
                 "requested_symbol": symbol,
                 "ins_code": ins_code,
@@ -171,8 +145,7 @@ def main() -> int:
                 "records": sorted(records, key=lambda r: r["date"]),
             }
             (folder / f"{today}.json").write_text(
-                json.dumps(payload, ensure_ascii=False, indent=2),
-                encoding="utf-8",
+                json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
             )
             universe.append({
                 "symbol": symbol,
@@ -192,7 +165,7 @@ def main() -> int:
     UNIVERSE.mkdir(parents=True, exist_ok=True)
     (UNIVERSE / f"{today}.json").write_text(
         json.dumps(
-            {"source": "TSETMC", "retrieved_at": dt.datetime.now().astimezone().isoformat(), "symbols": universe},
+            {"source": "TSETMC", "source_type": "daily_history", "retrieved_at": dt.datetime.now().astimezone().isoformat(), "symbols": universe},
             ensure_ascii=False,
             indent=2,
         ),
