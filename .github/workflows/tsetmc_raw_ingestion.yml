@@ -1,0 +1,27 @@
+name: TSETMC Raw Ingestion
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 6 * * 0-4"
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-raw:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch TSETMC raw data
+        run: python scripts/fetch_tsetmc_raw.py
+
+      - name: Commit raw data
+        run: |
+          git config user.name "SMART TSETMC Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add "runtime/بورس_خام"
+          git diff --cached --quiet || git commit -m "data: ingest raw TSETMC market data"
+          git push
