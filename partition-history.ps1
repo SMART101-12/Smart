@@ -4,20 +4,19 @@ Write-Host "=== SMART: validate and partition TSETMC history ==="
 
 $python = "C:\Users\s.nekounam\AppData\Local\Programs\Python\Python312\python.exe"
 $script = "scripts\partition_tsetmc_history.py"
-$symbol = "شبندر"
 
 if (-not (Test-Path $python)) {
     throw "Python not found: $python"
 }
 
-Write-Host "Test symbol: $symbol"
+Write-Host "Test symbol: Shbndr"
 Write-Host "Reading full raw history and creating monthly partitions..."
-& $python $script --symbol $symbol
+& $python $script --symbol-hex "063406280646062f063106"
 if ($LASTEXITCODE -ne 0) {
     throw "History partitioning failed. Git was not changed."
 }
 
-Write-Host "Adding only the شبندر partition and validation output..."
+Write-Host "Adding only the test partition and validation output..."
 git add -- "runtime/market_processed/history/شبندر" "runtime/market_processed/history_validation/شبندر"
 if ($LASTEXITCODE -ne 0) {
     throw "git add failed."
@@ -29,15 +28,15 @@ if (git diff --cached --quiet) {
 }
 
 $date = Get-Date -Format "yyyy-MM-dd"
-git commit -m "data: partition شبندر TSETMC history $date"
+git commit -m "data: partition Shbndr TSETMC history $date"
 if ($LASTEXITCODE -ne 0) {
     throw "git commit failed."
 }
 
-Write-Host "Pushing شبندر partitioned history to GitHub..."
+Write-Host "Pushing test partitioned history to GitHub..."
 git push origin agent/data-gap-recovery
 if ($LASTEXITCODE -ne 0) {
     throw "git push failed."
 }
 
-Write-Host "=== شبندر PARTITION TEST SUCCESSFUL ==="
+Write-Host "=== SHBNDER PARTITION TEST SUCCESSFUL ==="
