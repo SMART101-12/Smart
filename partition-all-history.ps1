@@ -4,11 +4,33 @@ Set-Location $root
 
 Write-Host "=== SMART: partition all TSETMC historical data ==="
 
-$python = Join-Path $root ".venv\Scripts\python.exe"
-if (-not (Test-Path $python)) {
-    $python = "C:\Users\s.nekounam\AppData\Local\Programs\Python\Python312\python.exe"
+# The repository has previously encountered broken .venv launchers that could
+# execute `python -c` but failed when launching a .py file. Therefore prefer
+# the known-good system Python for this pipeline and verify it can execute the
+# target script before changing Git state.
+$pythonCandidates = @(
+    "C:\Users\s.nekounam\AppData\Local\Programs\Python\Python312\python.exe",
+    (Join-Path $root ".venv\Scripts\python.exe")
+)
+
+$python = $null
+foreach ($candidate in $pythonCandidates) {
+    if (Test-Path $candidate) {
+        Write-Host "Testing Python: $candidate"
+        & $candidate "-c" "import sys; print(sys.executable)" *> $null
+        if ($LASTEXITCODE -eq 0) {
+            & $candidate "scripts\partition_all_tsetmc_history.py" *> $null
+            if ($LASTEXITCODE -eq 0) {
+                $python = $candidate
+                break
+            }
+        }
+    }
 }
-if (-not (Test-Path $python)) { throw "Python 3.12 not found." }
+
+if (-not $python) {
+    throw "No usable Python interpreter can execute scripts\partition_all_tsetmc_history.py. Git was not changed."
+}
 
 Write-Host "Using Python: $python"
 Write-Host "Reading history universe and processing by InsCode..."
