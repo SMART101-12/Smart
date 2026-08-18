@@ -17,13 +17,11 @@ jobs:
       - name: Split AYAR history
         run: python tools/split_ayar_history.py
       - name: Package monthly history
-        run: |
-          mkdir -p artifacts/ayar-monthly
-          cp runtime/market_raw/history/عیار/monthly/*.json artifacts/ayar-monthly/
-      - name: Upload AYAR monthly history artifact
+        run: tar -czf ayar-monthly-history.tar.gz -C runtime/market_raw/history/عیار monthly
+      - name: Upload permanent AYAR history artifact
         uses: actions/upload-artifact@v4
         with:
           name: ayar-monthly-history
-          path: artifacts/ayar-monthly/
-          if-no-files-found: error
-          retention-days: 30
+          path: ayar-monthly-history.tar.gz
+          retention-days: 90
+          compression-level: 0
