@@ -1,0 +1,56 @@
+{
+  "source": "TSETMC",
+  "source_type": "daily_history",
+  "symbol": "ضاطلس071907",
+  "requested_symbol": "ضاطلس071907",
+  "ins_code": 52049748436182471,
+  "source_url": "https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceDailyList/52049748436182471/0",
+  "retrieved_at": "2026-08-18T15:38:30.670101+03:30",
+  "record_count": 3,
+  "first_date": "20260815",
+  "last_date": "20260817",
+  "records": [
+    {
+      "date": "20260815",
+      "high": 0,
+      "low": 0,
+      "close": 1,
+      "last": 1,
+      "open": 0,
+      "previous_close": 1,
+      "value": 0,
+      "volume": 0,
+      "trades": 0,
+      "price_change": 0.0,
+      "ins_code": 52049748436182471
+    },
+    {
+      "date": "20260816",
+      "high": 0,
+      "low": 0,
+      "close": 1,
+      "last": 1,
+      "open": 0,
+      "previous_close": 1,
+      "value": 0,
+      "volume": 0,
+      "trades": 0,
+      "price_change": 0.0,
+      "ins_code": 52049748436182471
+    },
+    {
+      "date": "20260817",
+      "high": 0,
+      "low": 0,
+      "close": 1,
+      "last": 1,
+      "open": 0,
+      "previous_close": 1,
+      "value": 0,
+      "volume": 0,
+      "trades": 0,
+      "price_change": 0.0,
+      "ins_code": 52049748436182471
+    }
+  ]
+}

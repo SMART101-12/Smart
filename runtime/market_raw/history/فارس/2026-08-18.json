@@ -5,8 +5,8 @@
   "requested_symbol": "فارس",
   "ins_code": 25244329144808274,
   "source_url": "https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceDailyList/25244329144808274/0",
-  "retrieved_at": "2026-08-18T14:03:34.890328+03:30",
-  "record_count": 3237,
+  "retrieved_at": "2026-08-18T14:53:10.642365+03:30",
+  "record_count": 3236,
   "first_date": "20130310",
   "last_date": "20260817",
   "records": [
@@ -29934,7 +29934,7 @@
       "low": 10520,
       "close": 10690,
       "last": 10670,
-      "open": 0,
+      "open": 10740,
       "previous_close": 10740,
       "value": 94240883510,
       "volume": 8827545,
@@ -35632,7 +35632,7 @@
       "low": 11620,
       "close": 11690,
       "last": 11700,
-      "open": 0,
+      "open": 11750,
       "previous_close": 11740,
       "value": 258334488440,
       "volume": 22106064,
@@ -38539,20 +38539,6 @@
       "ins_code": 25244329144808274
     },
     {
-      "date": "20240807",
-      "high": 0,
-      "low": 0,
-      "close": 6850,
-      "last": 6850,
-      "open": 0,
-      "previous_close": 6850,
-      "value": 0,
-      "volume": 0,
-      "trades": 0,
-      "price_change": 0.0,
-      "ins_code": 25244329144808274
-    },
-    {
       "date": "20240810",
       "high": 6870,
       "low": 6790,
@@ -41273,13 +41259,13 @@
       "high": 8650,
       "low": 8390,
       "close": 8630,
-      "last": 8640,
+      "last": 8650,
       "open": 8440,
       "previous_close": 8400,
-      "value": 375327351460,
-      "volume": 43467791,
-      "trades": 2058,
-      "price_change": 240.0,
+      "value": 375548583860,
+      "volume": 43493367,
+      "trades": 2059,
+      "price_change": 250.0,
       "ins_code": 25244329144808274
     },
     {
@@ -41300,14 +41286,14 @@
       "date": "20250602",
       "high": 8630,
       "low": 8480,
-      "close": 8540,
-      "last": 8600,
+      "close": 8550,
+      "last": 8590,
       "open": 8480,
       "previous_close": 8480,
-      "value": 168446480050,
-      "volume": 19713388,
-      "trades": 916,
-      "price_change": 120.0,
+      "value": 173548818600,
+      "volume": 20306694,
+      "trades": 925,
+      "price_change": 110.0,
       "ins_code": 25244329144808274
     },
     {
@@ -41405,7 +41391,7 @@
       "value": 0,
       "volume": 0,
       "trades": 0,
-      "price_change": 20.0,
+      "price_change": 0.0,
       "ins_code": 25244329144808274
     },
     {
@@ -41419,7 +41405,7 @@
       "value": 0,
       "volume": 0,
       "trades": 0,
-      "price_change": 20.0,
+      "price_change": 0.0,
       "ins_code": 25244329144808274
     },
     {
@@ -41433,7 +41419,7 @@
       "value": 0,
       "volume": 0,
       "trades": 0,
-      "price_change": 20.0,
+      "price_change": 0.0,
       "ins_code": 25244329144808274
     },
     {
@@ -41461,7 +41447,7 @@
       "value": 0,
       "volume": 0,
       "trades": 0,
-      "price_change": 20.0,
+      "price_change": 0.0,
       "ins_code": 25244329144808274
     },
     {
@@ -41475,7 +41461,7 @@
       "value": 0,
       "volume": 0,
       "trades": 0,
-      "price_change": 20.0,
+      "price_change": 0.0,
       "ins_code": 25244329144808274
     },
     {
@@ -41489,7 +41475,7 @@
       "value": 0,
       "volume": 0,
       "trades": 0,
-      "price_change": 20.0,
+      "price_change": 0.0,
       "ins_code": 25244329144808274
     },
     {
@@ -41503,7 +41489,7 @@
       "value": 0,
       "volume": 0,
       "trades": 0,
-      "price_change": 20.0,
+      "price_change": 0.0,
       "ins_code": 25244329144808274
     },
     {

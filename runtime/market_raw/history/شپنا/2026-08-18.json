@@ -5,8 +5,8 @@
   "requested_symbol": "شپنا",
   "ins_code": 7745894403636165,
   "source_url": "https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceDailyList/7745894403636165/0",
-  "retrieved_at": "2026-08-18T14:03:20.995860+03:30",
-  "record_count": 4327,
+  "retrieved_at": "2026-08-18T15:24:03.864262+03:30",
+  "record_count": 4326,
   "first_date": "20080629",
   "last_date": "20260817",
   "records": [
@@ -52353,7 +52353,7 @@
       "value": 0,
       "volume": 0,
       "trades": 0,
-      "price_change": 20.0,
+      "price_change": 0.0,
       "ins_code": 7745894403636165
     },
     {
@@ -53799,20 +53799,6 @@
       "ins_code": 7745894403636165
     },
     {
-      "date": "20240807",
-      "high": 0,
-      "low": 0,
-      "close": 3908,
-      "last": 3902,
-      "open": 0,
-      "previous_close": 3908,
-      "value": 0,
-      "volume": 0,
-      "trades": 0,
-      "price_change": 0.0,
-      "ins_code": 7745894403636165
-    },
-    {
       "date": "20240810",
       "high": 3941,
       "low": 3875,
@@ -54156,9 +54142,9 @@
       "last": 3990,
       "open": 3950,
       "previous_close": 3945,
-      "value": 216879366688,
-      "volume": 54329791,
-      "trades": 2913,
+      "value": 216661544608,
+      "volume": 54275199,
+      "trades": 2912,
       "price_change": 45.0,
       "ins_code": 7745894403636165
     },
@@ -56665,7 +56651,7 @@
       "value": 0,
       "volume": 0,
       "trades": 0,
-      "price_change": 7.0,
+      "price_change": 0.0,
       "ins_code": 7745894403636165
     },
     {
@@ -56679,7 +56665,7 @@
       "value": 0,
       "volume": 0,
       "trades": 0,
-      "price_change": 7.0,
+      "price_change": 0.0,
       "ins_code": 7745894403636165
     },
     {
@@ -56693,7 +56679,7 @@
       "value": 0,
       "volume": 0,
       "trades": 0,
-      "price_change": 7.0,
+      "price_change": 0.0,
       "ins_code": 7745894403636165
     },
     {
@@ -56721,7 +56707,7 @@
       "value": 0,
       "volume": 0,
       "trades": 0,
-      "price_change": 7.0,
+      "price_change": 0.0,
       "ins_code": 7745894403636165
     },
     {
@@ -56735,7 +56721,7 @@
       "value": 0,
       "volume": 0,
       "trades": 0,
-      "price_change": 7.0,
+      "price_change": 0.0,
       "ins_code": 7745894403636165
     },
     {
@@ -56749,7 +56735,7 @@
       "value": 0,
       "volume": 0,
       "trades": 0,
-      "price_change": 7.0,
+      "price_change": 0.0,
       "ins_code": 7745894403636165
     },
     {
@@ -56763,7 +56749,7 @@
       "value": 0,
       "volume": 0,
       "trades": 0,
-      "price_change": 7.0,
+      "price_change": 0.0,
       "ins_code": 7745894403636165
     },
     {

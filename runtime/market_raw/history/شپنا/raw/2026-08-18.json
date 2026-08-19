@@ -5188,7 +5188,7 @@
       "qTotCap": 104967125880.0
     },
     {
-      "priceChange": 7.0,
+      "priceChange": 0.0,
       "priceMin": 0.0,
       "priceMax": 0.0,
       "priceYesterday": 4023.0,
@@ -5207,7 +5207,7 @@
       "qTotCap": 0.0
     },
     {
-      "priceChange": 7.0,
+      "priceChange": 0.0,
       "priceMin": 0.0,
       "priceMax": 0.0,
       "priceYesterday": 4023.0,
@@ -5226,7 +5226,7 @@
       "qTotCap": 0.0
     },
     {
-      "priceChange": 7.0,
+      "priceChange": 0.0,
       "priceMin": 0.0,
       "priceMax": 0.0,
       "priceYesterday": 4023.0,
@@ -5245,7 +5245,7 @@
       "qTotCap": 0.0
     },
     {
-      "priceChange": 7.0,
+      "priceChange": 0.0,
       "priceMin": 0.0,
       "priceMax": 0.0,
       "priceYesterday": 4023.0,
@@ -5283,7 +5283,7 @@
       "qTotCap": 0.0
     },
     {
-      "priceChange": 7.0,
+      "priceChange": 0.0,
       "priceMin": 0.0,
       "priceMax": 0.0,
       "priceYesterday": 4023.0,
@@ -5302,7 +5302,7 @@
       "qTotCap": 0.0
     },
     {
-      "priceChange": 7.0,
+      "priceChange": 0.0,
       "priceMin": 0.0,
       "priceMax": 0.0,
       "priceYesterday": 4023.0,
@@ -5321,7 +5321,7 @@
       "qTotCap": 0.0
     },
     {
-      "priceChange": 7.0,
+      "priceChange": 0.0,
       "priceMin": 0.0,
       "priceMax": 0.0,
       "priceYesterday": 4023.0,
@@ -8731,14 +8731,14 @@
       "id": 0,
       "insCode": "7745894403636165",
       "dEven": 20240916,
-      "hEven": 123943,
+      "hEven": 123951,
       "pClosing": 3992.0,
       "iClose": false,
       "yClose": true,
       "pDrCotVal": 3990.0,
-      "zTotTran": 2913.0,
-      "qTotTran5J": 54329791.0,
-      "qTotCap": 216879366688.0
+      "zTotTran": 2912.0,
+      "qTotTran5J": 54275199.0,
+      "qTotCap": 216661544608.0
     },
     {
       "priceChange": -118.0,
@@ -9195,25 +9195,6 @@
       "zTotTran": 2032.0,
       "qTotTran5J": 39483439.0,
       "qTotCap": 154628855697.0
-    },
-    {
-      "priceChange": 0.0,
-      "priceMin": 0.0,
-      "priceMax": 0.0,
-      "priceYesterday": 3908.0,
-      "priceFirst": 0.0,
-      "last": false,
-      "id": 0,
-      "insCode": "7745894403636165",
-      "dEven": 20240807,
-      "hEven": 61203,
-      "pClosing": 3908.0,
-      "iClose": false,
-      "yClose": true,
-      "pDrCotVal": 3902.0,
-      "zTotTran": 0.0,
-      "qTotTran5J": 0.0,
-      "qTotCap": 0.0
     },
     {
       "priceChange": -37.0,
@@ -11173,7 +11154,7 @@
       "qTotCap": 0.0
     },
     {
-      "priceChange": 20.0,
+      "priceChange": 0.0,
       "priceMin": 0.0,
       "priceMax": 0.0,
       "priceYesterday": 7700.0,

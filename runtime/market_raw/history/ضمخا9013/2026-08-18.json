@@ -1,0 +1,70 @@
+{
+  "source": "TSETMC",
+  "source_type": "daily_history",
+  "symbol": "ضمخا9013",
+  "requested_symbol": "ضمخا9013",
+  "ins_code": 51289558219706024,
+  "source_url": "https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceDailyList/51289558219706024/0",
+  "retrieved_at": "2026-08-18T15:03:10.859526+03:30",
+  "record_count": 4,
+  "first_date": "20260811",
+  "last_date": "20260817",
+  "records": [
+    {
+      "date": "20260811",
+      "high": 0,
+      "low": 0,
+      "close": 1,
+      "last": 1,
+      "open": 0,
+      "previous_close": 1,
+      "value": 0,
+      "volume": 0,
+      "trades": 0,
+      "price_change": 0.0,
+      "ins_code": 51289558219706024
+    },
+    {
+      "date": "20260815",
+      "high": 535,
+      "low": 460,
+      "close": 510,
+      "last": 460,
+      "open": 535,
+      "previous_close": 1,
+      "value": 1530000000,
+      "volume": 3000,
+      "trades": 3,
+      "price_change": 459.0,
+      "ins_code": 51289558219706024
+    },
+    {
+      "date": "20260816",
+      "high": 590,
+      "low": 430,
+      "close": 439,
+      "last": 441,
+      "open": 460,
+      "previous_close": 510,
+      "value": 1747588000,
+      "volume": 3985,
+      "trades": 47,
+      "price_change": -69.0,
+      "ins_code": 51289558219706024
+    },
+    {
+      "date": "20260817",
+      "high": 590,
+      "low": 461,
+      "close": 510,
+      "last": 505,
+      "open": 461,
+      "previous_close": 439,
+      "value": 2695975000,
+      "volume": 5288,
+      "trades": 36,
+      "price_change": 66.0,
+      "ins_code": 51289558219706024
+    }
+  ]
+}

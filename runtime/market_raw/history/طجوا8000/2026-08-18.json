@@ -1,0 +1,28 @@
+{
+  "source": "TSETMC",
+  "source_type": "daily_history",
+  "symbol": "طجوا8000",
+  "requested_symbol": "طجوا8000",
+  "ins_code": 2614477747377033,
+  "source_url": "https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceDailyList/2614477747377033/0",
+  "retrieved_at": "2026-08-18T15:55:08.092202+03:30",
+  "record_count": 1,
+  "first_date": "20260817",
+  "last_date": "20260817",
+  "records": [
+    {
+      "date": "20260817",
+      "high": 0,
+      "low": 0,
+      "close": 1,
+      "last": 1,
+      "open": 0,
+      "previous_close": 1,
+      "value": 0,
+      "volume": 0,
+      "trades": 0,
+      "price_change": 0.0,
+      "ins_code": 2614477747377033
+    }
+  ]
+}

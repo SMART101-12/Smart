@@ -1,0 +1,23 @@
+{
+  "closingPriceDaily": [
+    {
+      "priceChange": 0.0,
+      "priceMin": 0.0,
+      "priceMax": 0.0,
+      "priceYesterday": 1000.0,
+      "priceFirst": 0.0,
+      "last": false,
+      "id": 0,
+      "insCode": "72052393871894367",
+      "dEven": 20140701,
+      "hEven": 63051,
+      "pClosing": 1000.0,
+      "iClose": false,
+      "yClose": true,
+      "pDrCotVal": 1000.0,
+      "zTotTran": 0.0,
+      "qTotTran5J": 0.0,
+      "qTotCap": 0.0
+    }
+  ]
+}

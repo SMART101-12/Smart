@@ -1,0 +1,61 @@
+{
+  "closingPriceDaily": [
+    {
+      "priceChange": 73.0,
+      "priceMin": 70.0,
+      "priceMax": 80.0,
+      "priceYesterday": 1.0,
+      "priceFirst": 70.0,
+      "last": false,
+      "id": 0,
+      "insCode": "2141036942909626",
+      "dEven": 20260817,
+      "hEven": 122848,
+      "pClosing": 71.0,
+      "iClose": false,
+      "yClose": true,
+      "pDrCotVal": 74.0,
+      "zTotTran": 104.0,
+      "qTotTran5J": 38811.0,
+      "qTotCap": 2757580000.0
+    },
+    {
+      "priceChange": 0.0,
+      "priceMin": 0.0,
+      "priceMax": 0.0,
+      "priceYesterday": 1.0,
+      "priceFirst": 0.0,
+      "last": false,
+      "id": 0,
+      "insCode": "2141036942909626",
+      "dEven": 20260816,
+      "hEven": 61043,
+      "pClosing": 1.0,
+      "iClose": false,
+      "yClose": true,
+      "pDrCotVal": 1.0,
+      "zTotTran": 0.0,
+      "qTotTran5J": 0.0,
+      "qTotCap": 0.0
+    },
+    {
+      "priceChange": 0.0,
+      "priceMin": 0.0,
+      "priceMax": 0.0,
+      "priceYesterday": 1.0,
+      "priceFirst": 0.0,
+      "last": false,
+      "id": 0,
+      "insCode": "2141036942909626",
+      "dEven": 20260815,
+      "hEven": 61113,
+      "pClosing": 1.0,
+      "iClose": false,
+      "yClose": true,
+      "pDrCotVal": 1.0,
+      "zTotTran": 0.0,
+      "qTotTran5J": 0.0,
+      "qTotCap": 0.0
+    }
+  ]
+}
