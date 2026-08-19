@@ -1,0 +1,84 @@
+{
+  "schema_version": "2.0",
+  "instrument": {
+    "symbol_fa": "پالایش",
+    "symbol_en": "PALAYESH",
+    "ins_code": "67675656072510693",
+    "instrument_type": "fund",
+    "market": "iran_capital_market",
+    "status": "active"
+  },
+  "identity_history": [],
+  "source": {
+    "primary": "tsetmc",
+    "source_ids": {
+      "tsetmc_ins_code": "67675656072510693"
+    },
+    "acquisition_module": "smart.acquisition",
+    "acquisition_version": null,
+    "last_successful_fetch": null
+  },
+  "storage": {
+    "raw_path": "runtime/raw_market/PALAYESH_67675656072510693",
+    "validated_path": "runtime/validated_market/PALAYESH_67675656072510693",
+    "processed_path": "runtime/processed_market/PALAYESH_67675656072510693",
+    "validation_report_path": "runtime/validation_reports/PALAYESH_67675656072510693.json",
+    "analysis_path": "runtime/reports/PALAYESH_67675656072510693",
+    "ai_path": "runtime/ai/PALAYESH_67675656072510693"
+  },
+  "coverage": {
+    "first_observed_date": "2020-08-26",
+    "first_trading_date": null,
+    "last_observed_date": "2026-08-15",
+    "last_validated_date": null,
+    "calendar_version": null,
+    "expected_trading_days": null,
+    "received_days": 0,
+    "validated_days": 0,
+    "rejected_days": 0,
+    "missing_days": 0,
+    "duplicate_days": 0,
+    "coverage_ratio": null
+  },
+  "quality": {
+    "status": "not_validated",
+    "quality_score": null,
+    "last_validation_at": null,
+    "validation_run_id": null,
+    "validation_suite_version": null,
+    "rules": [],
+    "open_issues": [],
+    "resolved_issues": []
+  },
+  "validation_history": [],
+  "processing_history": [],
+  "analysis_history": [],
+  "strategy_tests": [],
+  "backtests": [],
+  "ai_history": [],
+  "data_lineage": {
+    "source_commit": null,
+    "raw_snapshot_ids": [],
+    "validated_snapshot_ids": [],
+    "processing_run_ids": [],
+    "analysis_run_ids": [],
+    "ai_run_ids": []
+  },
+  "current_state": {
+    "raw_ready": false,
+    "validated_ready": false,
+    "processed_ready": false,
+    "analysis_ready": false,
+    "ai_ready": false,
+    "last_state_change": null
+  },
+  "audit": {
+    "created_at": "2026-08-19",
+    "updated_at": "2026-08-19",
+    "created_by": "smart-v2",
+    "notes": [
+      "Metadata created as the V2 validation-layer template.",
+      "Existing legacy history is not being deleted or declared validated by this file."
+    ]
+  }
+}
