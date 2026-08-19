@@ -8,13 +8,19 @@ on:
       - 'tests/v2/**'
       - 'scripts/v2/**'
       - 'runtime/history/پالایش/**'
+      - 'runtime/v2/**'
       - '.github/workflows/v2-validation.yml'
 
+permissions:
+  contents: write
+
 jobs:
-  validate:
+  validate-and-promote:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: smart-v2-data-validation
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -23,8 +29,23 @@ jobs:
       - name: V2 unit tests
         env:
           PYTHONPATH: ./src
-        run: pytest -q tests/v2
+        run: python -m pytest -q tests/v2
       - name: PALAYESH validation
         env:
           PYTHONPATH: ./src
         run: python scripts/v2/validate_palaysh_history.py
+      - name: Promote validated PALAYESH dataset
+        env:
+          PYTHONPATH: ./src
+        run: python scripts/v2/promote_palaysh_validated.py
+      - name: Commit validated dataset
+        run: |
+          git config user.name "SMART V2 Bot"
+          git config user.email "smart-v2-bot@users.noreply.github.com"
+          git add runtime/validated_market/PALAYESH_67675656072510693 runtime/validation_reports/PALAYESH_67675656072510693
+          if git diff --cached --quiet; then
+            echo "No validated dataset changes to commit"
+          else
+            git commit -m "data(v2): promote validated PALAYESH history"
+            git push origin smart-v2-data-validation
+          fi
