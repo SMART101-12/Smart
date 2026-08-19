@@ -4,7 +4,7 @@ import json
 from datetime import date
 from pathlib import Path
 
-from smart.history_quality import audit_symbol, load_symbol_rows
+from smart_v2.validation.history_quality import audit_symbol, load_symbol_rows
 from smart_v2.validation.runner import validate_symbol_payload
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -26,15 +26,17 @@ def main() -> int:
     }
     result = validate_symbol_payload(payload)
 
+    history_pass = quality.get("status") == "OK" and not quality.get("missing_expected")
+    record_pass = result.status == "PASS"
     report = {
-        "schema_version": "2.0",
+        "schema_version": "2.1",
         "run_id": f"PALAYESH-VALIDATION-{date.today().isoformat()}",
         "symbol": "PALAYESH",
         "ins_code": INS_CODE,
         "record_validation": result.as_dict(),
         "history_quality": quality,
         "source": "runtime/history/پالایش",
-        "status": "PASS" if result.status == "PASS" and not quality.get("missing_expected") else "FAIL",
+        "status": "PASS" if record_pass and history_pass else "FAIL",
     }
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "latest.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
