@@ -21,6 +21,7 @@ class RawInstrument:
     source_date: str
     fields: dict[str, Any]
     row_number: int
+    ins_code: str | None = None
 
 
 class MarketWatchSplitter:
@@ -59,7 +60,7 @@ class MarketWatchSplitter:
                         "instrument": {
                             "symbol_fa": item.symbol_fa,
                             "symbol_key": folder_key,
-                            "ins_code": None,
+                            "ins_code": item.ins_code,
                         },
                         "source": {
                             "type": "tsetmc_marketwatch",
@@ -151,6 +152,7 @@ class MarketWatchSplitter:
         symbol_index = self._find_symbol_index(headers)
         if symbol_index is None:
             return []
+        ins_code_index = self._find_ins_code_index(headers)
 
         result: list[RawInstrument] = []
         seen_rows: set[str] = set()
@@ -169,6 +171,10 @@ class MarketWatchSplitter:
             if fingerprint in seen_rows:
                 continue
             seen_rows.add(fingerprint)
+            ins_code = None
+            if ins_code_index is not None and ins_code_index < len(row):
+                value = str(row[ins_code_index]).strip()
+                ins_code = value or None
             result.append(
                 RawInstrument(
                     symbol_fa=symbol_fa,
@@ -176,24 +182,41 @@ class MarketWatchSplitter:
                     source_date=source_date,
                     fields=fields,
                     row_number=row_number,
+                    ins_code=ins_code,
                 )
             )
         return result
 
     @classmethod
     def _find_header(cls, rows: list[list[str]]) -> int | None:
-        for pos, row in enumerate(rows[:50]):
-            nonempty = [str(v).strip() for v in row if str(v).strip()]
-            if len(nonempty) >= 5 and cls._find_symbol_index(nonempty) is not None:
+        """Find the first row containing a recognizable symbol header."""
+        for pos, row in enumerate(rows[:100]):
+            headers = [str(v).strip() for v in row]
+            if cls._find_symbol_index(headers) is not None:
                 return pos
         return None
 
     @staticmethod
-    def _find_symbol_index(headers: list[str]) -> int | None:
-        preferred = {"نماد", "symbol", "lval18", "l18", "lval18afc", "symbolfa"}
+    def _normalize_header(value: str) -> str:
+        return re.sub(r"\s+", "", str(value).strip().lower()).replace("\u200c", "")
+
+    @classmethod
+    def _find_symbol_index(cls, headers: list[str]) -> int | None:
+        preferred = {
+            "نماد", "symbol", "symbolfa", "symbolen",
+            "lval18", "l18", "lval18afc",
+        }
         for i, value in enumerate(headers):
-            normalized = re.sub(r"\s+", "", value.strip().lower()).replace("\u200c", "")
+            normalized = cls._normalize_header(value)
             if normalized in preferred or "نماد" in normalized:
+                return i
+        return None
+
+    @classmethod
+    def _find_ins_code_index(cls, headers: list[str]) -> int | None:
+        preferred = {"inscode", "inscodevalue", "inscodeid", "instrumentcode"}
+        for i, value in enumerate(headers):
+            if cls._normalize_header(value) in preferred:
                 return i
         return None
 
