@@ -1,12 +1,31 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Any
 
 
 class ProcessingService:
-    """Pure processing boundary; accepts validated records only."""
+    """Process validated market records without touching acquisition."""
 
     def process(self, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        # V2 intentionally starts with a no-op transformation. Indicators and
-        # feature engineering will be added without coupling to acquisition.
-        return [dict(record) for record in records]
+        output: list[dict[str, Any]] = []
+
+        for item in records:
+            record = dict(item.get("record", {}))
+
+            processed = dict(item)
+            processed["record"] = record
+            processed["processing"] = {
+                "status": "PROCESSED",
+                "derived": {
+                    "close": record.get("pClosing"),
+                    "last_price": record.get("pDrCotVal"),
+                    "price_change": record.get("priceChange"),
+                    "volume": record.get("qTotTran5J"),
+                    "trade_count": record.get("zTotTran"),
+                    "trade_value": record.get("qTotCap"),
+                },
+            }
+
+            output.append(processed)
+
+        return output

@@ -1,0 +1,40 @@
+{
+  "schema_version": "2.0",
+  "dataset_type": "PROCESSED",
+  "instrument": {
+    "symbol_fa": "پالایش",
+    "symbol_en": "PALAYESH",
+    "ins_code": "67675656072510693"
+  },
+  "source": {
+    "validated_root": "runtime/validated_market/PALAYESH_67675656072510693",
+    "processing_module": "smart_v2.processing",
+    "processing_service": "ProcessingService"
+  },
+  "coverage": {
+    "first_date": "2020-08-26",
+    "last_date": "2026-08-15",
+    "records": 1427
+  },
+  "lineage": {
+    "source_dataset": "PALAYESH-VALIDATION-2026-08-19",
+    "source_layer": "runtime/validated_market",
+    "source_records": 1427,
+    "processed_records": 1427
+  },
+  "processing": {
+    "status": "PROCESSED",
+    "features": [
+      "close",
+      "last_price",
+      "price_change",
+      "volume",
+      "trade_count",
+      "trade_value"
+    ]
+  },
+  "audit": {
+    "created_by": "SMART_V2",
+    "created_at": "2026-08-19T07:55:58.157390+00:00"
+  }
+}
