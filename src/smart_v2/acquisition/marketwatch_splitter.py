@@ -56,7 +56,8 @@ class MarketWatchSplitter:
         for item in instruments:
             seen[item.symbol_fa] = seen.get(item.symbol_fa, 0) + 1
             suffix = "" if duplicate_counts[item.symbol_fa] == 1 else f"_{seen[item.symbol_fa]}"
-            target_dir = output_root / item.symbol_key
+            folder_key = item.symbol_key + suffix
+            target_dir = output_root / folder_key
             target_dir.mkdir(parents=True, exist_ok=True)
             target = target_dir / source_date[:7] / f"{source_date}.json"
             target.write_text(
@@ -66,7 +67,7 @@ class MarketWatchSplitter:
                         "dataset_type": "RAW_MARKETWATCH",
                         "instrument": {
                             "symbol_fa": item.symbol_fa,
-                            "symbol_key": item.symbol_key + suffix,
+                            "symbol_key": folder_key,
                             "ins_code": None,
                         },
                         "source": {
