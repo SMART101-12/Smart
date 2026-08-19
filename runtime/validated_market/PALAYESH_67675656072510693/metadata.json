@@ -7,7 +7,7 @@
     "instrument_type": "ETF",
     "market_type": "EQUITY"
   },
-  "status": "PENDING_VALIDATION",
+  "status": "VALIDATED",
   "source": {
     "provider": "TSETMC",
     "acquisition_module": "smart_v2.acquisition",
@@ -26,37 +26,46 @@
   "coverage": {
     "first_observed_date": "2020-08-26",
     "last_observed_date": "2026-08-15",
-    "expected_trading_days": null,
-    "observed_records": null,
-    "validated_records": 0,
-    "missing_records": null,
-    "duplicate_records": null,
-    "gap_count": null,
-    "coverage_ratio": null
+    "expected_trading_days": 1372,
+    "observed_records": 1427,
+    "validated_records": 1427,
+    "missing_records": 0,
+    "duplicate_records": 0,
+    "gap_count": 0,
+    "coverage_ratio": 1.04008746
   },
   "quality": {
-    "overall_status": "PENDING",
-    "quality_score": null,
-    "last_validation_run_id": null,
-    "last_validation_at": null,
-    "validation_suite_version": "2.0.0",
+    "overall_status": "PASS",
+    "quality_score": 100.0,
+    "last_validation_run_id": "PALAYESH-VALIDATION-2026-08-19",
+    "last_validation_at": "2026-08-19T07:26:48.577860+00:00",
+    "validation_suite_version": "2.1.0",
     "checks": {
-      "date": "PENDING",
-      "price": "PENDING",
-      "ohlc": "PENDING",
-      "volume": "PENDING",
-      "duplicate": "PENDING",
-      "gap": "PENDING",
-      "symbol_identity": "PENDING",
-      "market_calendar": "PENDING"
+      "date": "PASS",
+      "price": "PASS",
+      "ohlc": "PASS",
+      "volume": "PASS",
+      "duplicate": "PASS",
+      "gap": "PASS",
+      "symbol_identity": "PASS",
+      "market_calendar": "PASS"
     }
   },
   "lineage": {
     "raw_snapshot_version": null,
-    "validated_dataset_version": null,
+    "validated_dataset_version": "PALAYESH-VALIDATION-2026-08-19",
     "processed_dataset_versions": [],
     "source_commits": [],
-    "transformations": []
+    "transformations": [
+      {
+        "run_id": "PALAYESH-VALIDATION-2026-08-19",
+        "operation": "validate_and_promote",
+        "source": "runtime/history/پالایش",
+        "target": "runtime/validated_market/PALAYESH_67675656072510693",
+        "records": 1427,
+        "timestamp": "2026-08-19T07:26:48.577860+00:00"
+      }
+    ]
   },
   "processing_history": [],
   "analysis_history": [],
@@ -70,7 +79,19 @@
     "notes": [
       "Observed historical range is not yet certified as gap-free.",
       "No record is considered validated until the V2 validation pipeline passes it.",
-      "Raw source data must remain immutable; validated data is a separate derivative layer."
+      "Raw source data must remain immutable; validated data is a separate derivative layer.",
+      "Validated dataset contains only records from a PASS validation run; raw history remains immutable."
     ]
-  }
+  },
+  "validation_history": [
+    {
+      "run_id": "PALAYESH-VALIDATION-2026-08-19",
+      "timestamp": "2026-08-19T07:26:48.577860+00:00",
+      "records_tested": 1427,
+      "records_passed": 1427,
+      "records_failed": 0,
+      "missing_expected": [],
+      "status": "PASS"
+    }
+  ]
 }
