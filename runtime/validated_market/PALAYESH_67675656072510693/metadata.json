@@ -1,0 +1,76 @@
+{
+  "schema_version": "2.0",
+  "instrument": {
+    "symbol_fa": "پالایش",
+    "symbol_en": "PALAYESH",
+    "ins_code": "67675656072510693",
+    "instrument_type": "ETF",
+    "market_type": "EQUITY"
+  },
+  "status": "PENDING_VALIDATION",
+  "source": {
+    "provider": "TSETMC",
+    "acquisition_module": "smart_v2.acquisition",
+    "source_endpoint_family": "cdn.tsetmc.com/api",
+    "source_data_is_raw": true
+  },
+  "paths": {
+    "raw": "runtime/raw_market/PALAYESH_67675656072510693",
+    "validated": "runtime/validated_market/PALAYESH_67675656072510693",
+    "processed": "runtime/processed_market/PALAYESH_67675656072510693",
+    "validation_reports": "runtime/validation_reports/PALAYESH_67675656072510693",
+    "analysis": "runtime/analysis/PALAYESH_67675656072510693",
+    "ai": "runtime/ai/PALAYESH_67675656072510693",
+    "reports": "runtime/reports/PALAYESH_67675656072510693"
+  },
+  "coverage": {
+    "first_observed_date": "2020-08-26",
+    "last_observed_date": "2026-08-15",
+    "expected_trading_days": null,
+    "observed_records": null,
+    "validated_records": 0,
+    "missing_records": null,
+    "duplicate_records": null,
+    "gap_count": null,
+    "coverage_ratio": null
+  },
+  "quality": {
+    "overall_status": "PENDING",
+    "quality_score": null,
+    "last_validation_run_id": null,
+    "last_validation_at": null,
+    "validation_suite_version": "2.0.0",
+    "checks": {
+      "date": "PENDING",
+      "price": "PENDING",
+      "ohlc": "PENDING",
+      "volume": "PENDING",
+      "duplicate": "PENDING",
+      "gap": "PENDING",
+      "symbol_identity": "PENDING",
+      "market_calendar": "PENDING"
+    }
+  },
+  "lineage": {
+    "raw_snapshot_version": null,
+    "validated_dataset_version": null,
+    "processed_dataset_versions": [],
+    "source_commits": [],
+    "transformations": []
+  },
+  "processing_history": [],
+  "analysis_history": [],
+  "strategy_tests": [],
+  "backtests": [],
+  "ai_history": [],
+  "audit": {
+    "created_at": "2026-08-19",
+    "created_by": "SMART_V2",
+    "last_updated_at": "2026-08-19",
+    "notes": [
+      "Observed historical range is not yet certified as gap-free.",
+      "No record is considered validated until the V2 validation pipeline passes it.",
+      "Raw source data must remain immutable; validated data is a separate derivative layer."
+    ]
+  }
+}
