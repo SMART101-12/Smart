@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "market_types": {
+    "EQUITY": {
+      "closed_periods": [
+        {
+          "start": "2021-07-24",
+          "end": "2021-07-25",
+          "reason": "COVID-19 market-wide closure during Tehran/Alborz shutdown",
+          "scope": "all_markets"
+        },
+        {
+          "start": "2026-07-04",
+          "end": "2026-07-06",
+          "reason": "Capital-market closure announced for 13-15 Tir 1405",
+          "scope": "all_markets"
+        }
+      ]
+    }
+  }
+}
