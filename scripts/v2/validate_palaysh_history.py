@@ -16,7 +16,7 @@ OUT = ROOT / "runtime" / "validation_reports" / "PALAYESH_67675656072510693"
 def main() -> int:
     rows = load_symbol_rows(SYMBOL)
     if not rows:
-        raise SystemExit("No PALAYESH history found in runtime/history/palایش")
+        raise SystemExit("No PALAYESH history found in runtime/history/پالایش")
 
     quality = audit_symbol(SYMBOL, market_type="EQUITY")
     payload = {
