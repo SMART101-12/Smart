@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field as dataclass_field
 from typing import Any
 
 
@@ -11,7 +11,7 @@ class ValidationIssue:
     message: str
     date: str | None = None
     field: str | None = None
-    details: dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = dataclass_field(default_factory=dict)
 
 
 @dataclass
@@ -22,8 +22,8 @@ class ValidationResult:
     checked_records: int = 0
     passed_records: int = 0
     failed_records: int = 0
-    issues: list[ValidationIssue] = field(default_factory=list)
-    checks: dict[str, dict[str, Any]] = field(default_factory=dict)
+    issues: list[ValidationIssue] = dataclass_field(default_factory=list)
+    checks: dict[str, dict[str, Any]] = dataclass_field(default_factory=dict)
 
     def add_issue(self, issue: ValidationIssue) -> None:
         self.issues.append(issue)
