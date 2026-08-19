@@ -8,6 +8,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[3]
 HISTORY_ROOT = ROOT / "runtime" / "history"
 CALENDAR_PATH = ROOT / "runtime" / "market_calendar.json"
+OVERRIDE_PATH = ROOT / "runtime" / "v2" / "market_calendar_overrides.json"
 WEEKLY_CLOSED_WEEKDAYS = {3, 4}  # Thursday, Friday
 
 
@@ -47,8 +48,7 @@ def load_symbol_rows(symbol: str) -> dict[date, dict[str, Any]]:
     return rows
 
 
-def _closed_dates(start: date, end: date, market_type: str = "EQUITY") -> set[date]:
-    payload = _load_json(CALENDAR_PATH)
+def _period_dates(payload: dict[str, Any], start: date, end: date, market_type: str) -> set[date]:
     periods = payload.get("market_types", {}).get(market_type, {}).get("closed_periods", [])
     result: set[date] = set()
     for period in periods:
@@ -61,6 +61,12 @@ def _closed_dates(start: date, end: date, market_type: str = "EQUITY") -> set[da
             result.add(left)
             left += timedelta(days=1)
     return result
+
+
+def _closed_dates(start: date, end: date, market_type: str = "EQUITY") -> set[date]:
+    base = _load_json(CALENDAR_PATH)
+    overrides = _load_json(OVERRIDE_PATH)
+    return _period_dates(base, start, end, market_type) | _period_dates(overrides, start, end, market_type)
 
 
 def _candidate_dates(start: date, end: date) -> set[date]:
