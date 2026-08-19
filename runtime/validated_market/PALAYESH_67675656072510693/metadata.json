@@ -38,7 +38,7 @@
     "overall_status": "PASS",
     "quality_score": 100.0,
     "last_validation_run_id": "PALAYESH-VALIDATION-2026-08-19",
-    "last_validation_at": "2026-08-19T08:25:04.182717+00:00",
+    "last_validation_at": "2026-08-19T09:30:07.728788+00:00",
     "validation_suite_version": "2.1.0",
     "checks": {
       "date": "PASS",
@@ -96,6 +96,14 @@
         "target": "runtime/validated_market/PALAYESH_67675656072510693",
         "records": 1427,
         "timestamp": "2026-08-19T08:25:04.182717+00:00"
+      },
+      {
+        "run_id": "PALAYESH-VALIDATION-2026-08-19",
+        "operation": "validate_and_promote",
+        "source": "runtime/history/پالایش",
+        "target": "runtime/validated_market/PALAYESH_67675656072510693",
+        "records": 1427,
+        "timestamp": "2026-08-19T09:30:07.728788+00:00"
       }
     ]
   },
@@ -112,6 +120,7 @@
       "Observed historical range is not yet certified as gap-free.",
       "No record is considered validated until the V2 validation pipeline passes it.",
       "Raw source data must remain immutable; validated data is a separate derivative layer.",
+      "Validated dataset contains only records from a PASS validation run; raw history remains immutable.",
       "Validated dataset contains only records from a PASS validation run; raw history remains immutable.",
       "Validated dataset contains only records from a PASS validation run; raw history remains immutable.",
       "Validated dataset contains only records from a PASS validation run; raw history remains immutable.",
@@ -159,6 +168,15 @@
     {
       "run_id": "PALAYESH-VALIDATION-2026-08-19",
       "timestamp": "2026-08-19T08:25:04.182717+00:00",
+      "records_tested": 1427,
+      "records_passed": 1427,
+      "records_failed": 0,
+      "missing_expected": [],
+      "status": "PASS"
+    },
+    {
+      "run_id": "PALAYESH-VALIDATION-2026-08-19",
+      "timestamp": "2026-08-19T09:30:07.728788+00:00",
       "records_tested": 1427,
       "records_passed": 1427,
       "records_failed": 0,
