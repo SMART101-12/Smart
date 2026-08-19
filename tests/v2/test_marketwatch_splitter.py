@@ -1,5 +1,6 @@
 import gzip
 import io
+import json
 import zipfile
 from pathlib import Path
 
@@ -40,11 +41,12 @@ def test_marketwatch_splitter_preserves_raw_boundary(tmp_path: Path):
     written = MarketWatchSplitter().split(source, output, "2026-08-19")
 
     assert len(written) == 1
-    assert written[0].as_posix().endswith("TEST_123/2026-08-19.json")
-    text = written[0].read_text(encoding="utf-8")
-    assert '"dataset_type": "RAW_MARKETWATCH"' in text
-    assert '"symbol_fa": "آزمایشی"' in text
-    assert '"Close": "100"' in text
+    assert written[0].as_posix().endswith("SYMBOL_747B057B1C4C/2026-08/2026-08-19.json")
+    payload = json.loads(written[0].read_text(encoding="utf-8"))
+    assert payload["dataset_type"] == "RAW_MARKETWATCH"
+    assert payload["instrument"]["symbol_fa"] == "آزمایشی"
+    assert payload["instrument"]["ins_code"] is None
+    assert payload["raw"]["Close"] == "100"
 
 
 def test_sparse_cells_are_aligned_by_excel_reference(tmp_path: Path):
@@ -57,10 +59,10 @@ def test_sparse_cells_are_aligned_by_excel_reference(tmp_path: Path):
     written = MarketWatchSplitter().split(source, output, "2026-08-19")
 
     assert len(written) == 1
-    assert written[0].as_posix().endswith("INS_456_456/2026-08-19.json")
-    text = written[0].read_text(encoding="utf-8")
-    assert '"symbol_fa": "فولاد"' in text
-    assert '"Close": "200"' in text
+    assert written[0].as_posix().endswith("SYMBOL_FC1D3C950536/2026-08/2026-08-19.json")
+    payload = json.loads(written[0].read_text(encoding="utf-8"))
+    assert payload["instrument"]["symbol_fa"] == "فولاد"
+    assert payload["raw"]["Close"] == "200"
 
 
 def test_header_can_appear_after_metadata_rows(tmp_path: Path):
@@ -75,7 +77,7 @@ def test_header_can_appear_after_metadata_rows(tmp_path: Path):
     written = MarketWatchSplitter().split(source, output, "2026-08-19")
 
     assert len(written) == 1
-    assert written[0].as_posix().endswith("TEST2_789/2026-08-19.json")
+    assert written[0].as_posix().endswith("SYMBOL_476B5EED9793/2026-08/2026-08-19.json")
 
 
 def test_shared_strings_and_duplicate_ins_code(tmp_path: Path):
@@ -90,7 +92,7 @@ def test_shared_strings_and_duplicate_ins_code(tmp_path: Path):
     written = MarketWatchSplitter().split(source, output, "2026-08-19")
 
     assert len(written) == 1
-    assert written[0].as_posix().endswith("TEST3_999/2026-08-19.json")
+    assert written[0].as_posix().endswith("SYMBOL_8E687366D567/2026-08/2026-08-19.json")
 
 
 def test_non_ascii_symbol_en_uses_english_safe_directory_key(tmp_path: Path):
@@ -103,4 +105,24 @@ def test_non_ascii_symbol_en_uses_english_safe_directory_key(tmp_path: Path):
     written = MarketWatchSplitter().split(source, output, "2026-08-19")
 
     assert len(written) == 1
-    assert written[0].as_posix().endswith("INS_321_321/2026-08-19.json")
+    assert written[0].as_posix().endswith("SYMBOL_D498D640884A/2026-08/2026-08-19.json")
+
+
+def test_real_marketwatch_persian_header_shape(tmp_path: Path):
+    xlsx = _xlsx_bytes(f'''<worksheet xmlns="{NS}"><sheetData>
+        <row r="1"><c r="A1" t="inlineStr"><is><t> </t></is></c></row>
+        <row r="2"><c r="A2" t="inlineStr"><is><t>دیده بان بازار : 1405/05/28 - زمان آخرین معامله : 12:32:25</t></is></c></row>
+        <row r="3"><c r="A3" t="inlineStr"><is><t>نماد</t></is></c><c r="B3" t="inlineStr"><is><t>نام</t></is></c><c r="C3" t="inlineStr"><is><t>تعداد</t></is></c><c r="D3" t="inlineStr"><is><t>حجم</t></is></c><c r="E3" t="inlineStr"><is><t>ارزش</t></is></c><c r="F3" t="inlineStr"><is><t>دیروز</t></is></c><c r="G3" t="inlineStr"><is><t>اولین</t></is></c><c r="H3" t="inlineStr"><is><t>آخرین معامله - مقدار</t></is></c></row>
+        <row r="4"><c r="A4" t="inlineStr"><is><t>فولاد</t></is></c><c r="B4" t="inlineStr"><is><t>فولاد مبارکه اصفهان</t></is></c><c r="C4"><v>100</v></c><c r="D4"><v>2000</v></c><c r="E4"><v>300000</v></c><c r="F4"><v>4000</v></c><c r="G4"><v>4100</v></c><c r="H4"><v>4200</v></c></row>
+    </sheetData></worksheet>''')
+    source, output = _write_snapshot(tmp_path, xlsx)
+
+    written = MarketWatchSplitter().split(source, output, "2026-08-19")
+
+    assert len(written) == 1
+    assert written[0].as_posix().endswith("SYMBOL_FC1D3C950536/2026-08/2026-08-19.json")
+    payload = json.loads(written[0].read_text(encoding="utf-8"))
+    assert payload["instrument"]["symbol_fa"] == "فولاد"
+    assert payload["instrument"]["ins_code"] is None
+    assert payload["raw"]["نام"] == "فولاد مبارکه اصفهان"
+    assert payload["raw"]["آخرین معامله - مقدار"] == "4200"
