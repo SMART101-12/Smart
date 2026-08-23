@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "run_id": "GOLD-2026-08-21-V1",
+  "model_version": "gold-global-v1",
+  "feature_set_version": "gold-features-v1",
+  "date": "2026-08-21",
+  "input_snapshot": "verified-web-2026-08-23",
+  "market": {
+    "xau_usd_spot": 4623.94,
+    "xau_usd_intraday_high": 4631.99,
+    "us_gold_futures_close": 4680.60,
+    "weekly_return_approx": 0.05,
+    "above_200dma": true,
+    "gold_200dma_approx": 4513
+  },
+  "macro": {
+    "dxy_direction": "down",
+    "treasury_buyback_signal": "supportive_gold_via_usd_debasement_fears",
+    "fed_hike_expectation": "reduced_but_not_eliminated",
+    "geopolitical_risk": "elevated"
+  },
+  "supply_demand": {
+    "central_bank_q2_tonnes": 288.9,
+    "central_bank_h1_tonnes": 345.0,
+    "etf_q2_tonnes": -44.8,
+    "jewellery_q2_tonnes": 278.2,
+    "mine_production_q2_tonnes": 965.6,
+    "lbma_q2_average": 4506.29
+  },
+  "model_assessment": {
+    "regime": "BULLISH",
+    "score": null,
+    "score_status": "pending_full_processed_feature_set",
+    "key_positive_factors": ["gold momentum", "weaker dollar", "Treasury buyback/debasement concern", "elevated geopolitical risk", "strong central-bank demand"],
+    "key_negative_factors": ["high yields", "ETF outflows", "weak jewellery demand"],
+    "base_case": "continuation of bullish trend with elevated volatility",
+    "bull_range_1_3m": [5000, 5500],
+    "base_range_1_3m": [4200, 4900],
+    "bear_range_1_3m": [3800, 4500]
+  },
+  "learning_targets": {
+    "horizon_days": [1, 3, 5, 20],
+    "realized_return": null,
+    "direction_hit": null,
+    "max_favorable_excursion": null,
+    "max_adverse_excursion": null
+  },
+  "sources": [
+    {"publisher": "Reuters", "date": "2026-08-21", "topic": "gold price and Treasury buybacks", "reference": "turn0news25"},
+    {"publisher": "Reuters", "date": "2026-08-21", "topic": "Treasury buyback and dollar", "reference": "turn0news26"},
+    {"publisher": "World Gold Council", "date": "2026-07-30", "topic": "Gold Demand Trends Q2 2026", "reference": "turn0search1"}
+  ],
+  "data_quality": {
+    "status": "PARTIAL_PASS",
+    "reason": "Verified market and quarterly demand data available; complete daily DXY/yield/real-yield/Fed feature vector still required before numerical composite score is finalized."
+  }
+}
