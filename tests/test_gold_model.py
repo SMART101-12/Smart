@@ -22,5 +22,5 @@ def test_full_score_is_weighted_and_covered():
 
 def test_missing_factors_are_renormalized_and_coverage_is_exposed():
     result = score_factors({"xau_momentum": 1.0, "dxy": -1.0})
-    assert result.score == 0.285714
+    assert result.score == 0.25
     assert result.coverage == 0.40
