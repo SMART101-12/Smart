@@ -65,3 +65,45 @@ def test_derivative_only_results_are_rejected():
         assert "No primary tradable instrument" in str(exc)
     else:
         raise AssertionError("Derivative-only search must not resolve to a primary symbol")
+
+
+def test_arabic_persian_ticker_variants_resolve_to_same_instrument():
+    f_meli = {
+        "insCode": "f_meli",
+        "lVal18AFC": "فملي",
+        "lVal30": "ملي‌ صنايع‌ مس‌ ايران‌",
+        "flow": 1,
+        "sourceID": 1,
+        "cgrValCot": "N1",
+    }
+    adapter = FakeAdapter([f_meli])
+
+    resolved = adapter.resolve_symbol("فملی")
+
+    assert resolved["insCode"] == "f_meli"
+    assert resolved["resolver"]["match"] == "exact_ticker"
+    assert resolved["resolver"]["normalized_symbol"] == "فملی"
+
+
+def test_arabic_kaf_and_yeh_variants_resolve():
+    rows = [
+        {
+            "insCode": "kegol",
+            "lVal18AFC": "كگل",
+            "lVal30": "گل گهر",
+            "flow": 1,
+            "sourceID": 1,
+            "cgrValCot": "N1",
+        },
+        {
+            "insCode": "ayar",
+            "lVal18AFC": "عيار",
+            "lVal30": "صندوق سرمایه گذاری طلای عیار",
+            "flow": 1,
+            "sourceID": 1,
+            "cgrValCot": "51",
+        },
+    ]
+
+    assert FakeAdapter([rows[0]]).resolve_symbol("کگل")["insCode"] == "kegol"
+    assert FakeAdapter([rows[1]]).resolve_symbol("عیار")["insCode"] == "ayar"
