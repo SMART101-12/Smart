@@ -3,7 +3,8 @@
 Layout:
   runtime/بورس_خام/<symbol>/<YYYY-MM>/<YYYY-MM-DD>.json
 
-The payload from TSETMC is stored unchanged. No analysis/normalization is performed.
+The payload from TSETMC is stored unchanged. Symbol normalization is used
+only to resolve the requested ticker to the correct instrument record.
 """
 from __future__ import annotations
 
@@ -12,6 +13,8 @@ import json
 from pathlib import Path
 from urllib.parse import quote
 from urllib.request import Request, urlopen
+
+from smart.persian_text import normalize_persian_text
 
 BASE = "https://cdn.tsetmc.com/api"
 HEADERS = {"User-Agent": "Mozilla/5.0 SMART-raw-ingestion/2.0"}
@@ -38,6 +41,35 @@ def read_symbols() -> list[str]:
     if not SYMBOLS_FILE.exists():
         raise SystemExit(f"Missing {SYMBOLS_FILE}")
     return [x.strip() for x in SYMBOLS_FILE.read_text(encoding="utf-8").splitlines() if x.strip() and not x.startswith("#")]
+
+
+def resolve_search_row(symbol: str, rows: list[dict]) -> dict:
+    """Resolve only an exact ticker/name after Persian Unicode normalization.
+
+    Never fall back to rows[0]: a search can return rights, options, and other
+    instruments before or alongside the primary instrument.
+    """
+    query = normalize_persian_text(symbol)
+
+    ticker_matches = [
+        row for row in rows
+        if normalize_persian_text(row.get("lVal18AFC", "")) == query
+    ]
+    if ticker_matches:
+        primary = [row for row in ticker_matches if row.get("flow") in {1, 2} and row.get("insCode")]
+        if primary:
+            return primary[0]
+
+    name_matches = [
+        row for row in rows
+        if normalize_persian_text(row.get("lVal30", "")) == query
+    ]
+    if name_matches:
+        primary = [row for row in name_matches if row.get("flow") in {1, 2} and row.get("insCode")]
+        if primary:
+            return primary[0]
+
+    raise RuntimeError(f"No exact primary TSETMC instrument match for {symbol}")
 
 
 def gregorian_to_jalali(gy: int, gm: int, gd: int) -> tuple[int, int, int]:
@@ -80,7 +112,8 @@ def main() -> int:
                 print(f"NOT_FOUND: {symbol}")
                 failed += 1
                 continue
-            ins_code = str(rows[0].get("insCode"))
+            instrument = resolve_search_row(symbol, rows)
+            ins_code = str(instrument["insCode"])
             payload = {
                 "source": "TSETMC",
                 "symbol": symbol,
