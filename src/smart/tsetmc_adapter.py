@@ -14,6 +14,7 @@ from urllib.parse import quote
 
 import requests
 
+from .persian_text import normalize_persian_text
 from .snapshot_store import SnapshotStore
 
 BASE_URL = "https://cdn.tsetmc.com/api"
@@ -81,12 +82,12 @@ class TsetmcAdapter:
     @classmethod
     def _rank_search_results(cls, symbol: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Rank search results deterministically, with exact primary instruments first."""
-        query = str(symbol or "").strip()
+        query = normalize_persian_text(symbol)
         ranked: list[tuple[int, int, dict[str, Any]]] = []
 
         for index, row in enumerate(rows):
-            ticker = str(row.get("lVal18AFC") or "").strip()
-            name = str(row.get("lVal30") or "").strip()
+            ticker = normalize_persian_text(row.get("lVal18AFC", ""))
+            name = normalize_persian_text(row.get("lVal30", ""))
             flow = row.get("flow")
             non_primary = cls._is_derivative_or_non_primary(row)
 
@@ -119,29 +120,33 @@ class TsetmcAdapter:
     def resolve_symbol(self, symbol: str) -> dict[str, Any]:
         """Resolve a user symbol to one deterministic primary TSETMC instrument.
 
-        Exact ticker/name matches always beat fuzzy matches. Rights, options,
+        Exact ticker/name matches always beat fuzzy matches. Persian/Arabic
+        Unicode variants are normalized only for matching. Rights, options,
         debt/financing instruments and other derivatives are excluded from
         winning resolution. The selected row includes resolver metadata so
         downstream history/analysis can audit why that instrument was chosen.
         """
-        query = str(symbol or "").strip()
+        query = normalize_persian_text(symbol)
         if not query:
             raise RuntimeError("Symbol must not be empty")
 
-        rows = self.search(query)
+        rows = self.search(symbol)
         ranked = self._rank_search_results(query, rows)
         if not ranked:
-            raise RuntimeError(f"Symbol not found on TSETMC: {query}")
+            raise RuntimeError(f"Symbol not found on TSETMC: {symbol}")
 
         primary = ranked[0]
         if not primary.get("insCode") or self._is_derivative_or_non_primary(primary):
-            raise RuntimeError(f"No primary tradable instrument found on TSETMC: {query}")
+            raise RuntimeError(f"No primary tradable instrument found on TSETMC: {symbol}")
 
         resolved = dict(primary)
+        normalized_ticker = normalize_persian_text(resolved.get("lVal18AFC", ""))
+        normalized_name = normalize_persian_text(resolved.get("lVal30", ""))
         resolved["resolver"] = {
-            "requested_symbol": query,
-            "match": "exact_ticker" if resolved.get("lVal18AFC") == query else (
-                "exact_name" if resolved.get("lVal30") == query else "ranked_search"
+            "requested_symbol": symbol,
+            "normalized_symbol": query,
+            "match": "exact_ticker" if normalized_ticker == query else (
+                "exact_name" if normalized_name == query else "ranked_search"
             ),
             "candidate_count": len(rows),
             "excluded_candidate_count": sum(self._is_derivative_or_non_primary(row) for row in rows),
