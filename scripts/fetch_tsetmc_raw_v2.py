@@ -10,15 +10,20 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import sys
 from pathlib import Path
 from urllib.parse import quote
 from urllib.request import Request, urlopen
+
+ROOT = Path(__file__).resolve().parents[1]
+src = ROOT / "src"
+if str(src) not in sys.path:
+    sys.path.insert(0, str(src))
 
 from smart.persian_text import normalize_persian_text
 
 BASE = "https://cdn.tsetmc.com/api"
 HEADERS = {"User-Agent": "Mozilla/5.0 SMART-raw-ingestion/2.0"}
-ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "runtime" / "بورس_خام"
 SYMBOLS_FILE = ROOT / "config" / "tsetmc_symbols.txt"
 
