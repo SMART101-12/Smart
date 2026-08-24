@@ -48,31 +48,49 @@ def read_symbols() -> list[str]:
     return [x.strip() for x in SYMBOLS_FILE.read_text(encoding="utf-8").splitlines() if x.strip() and not x.startswith("#")]
 
 
-def resolve_search_row(symbol: str, rows: list[dict]) -> dict:
-    """Resolve only an exact ticker/name after Persian Unicode normalization.
+def _is_non_primary(row: dict) -> bool:
+    """Exclude rights, options and clearly non-primary instruments."""
+    ticker = normalize_persian_text(row.get("lVal18AFC", ""))
+    name = normalize_persian_text(row.get("lVal30", ""))
+    category = str(row.get("cgrValCot") or "").upper()
 
-    Never fall back to rows[0]: a search can return rights, options, and other
-    instruments before or alongside the primary instrument.
+    if ticker.endswith("ح") or name.startswith("ح .") or name.startswith("ح."):
+        return True
+    if row.get("flow") == 3 or category.startswith("3"):
+        return True
+    if category in {"17", "16", "OT", "QD"}:
+        return True
+    if "اختیار" in name or "مرابحه" in name:
+        return True
+    return False
+
+
+def resolve_search_row(symbol: str, rows: list[dict]) -> dict:
+    """Resolve an exact ticker/name after Persian Unicode normalization.
+
+    Exact ticker matches are preferred regardless of market flow because
+    TSETMC ETFs/funds can use flows outside the ordinary equity values 1/2.
+    Explicit derivatives/rights/debt instruments are still excluded.
     """
     query = normalize_persian_text(symbol)
 
     ticker_matches = [
         row for row in rows
         if normalize_persian_text(row.get("lVal18AFC", "")) == query
+        and row.get("insCode")
+        and not _is_non_primary(row)
     ]
     if ticker_matches:
-        primary = [row for row in ticker_matches if row.get("flow") in {1, 2} and row.get("insCode")]
-        if primary:
-            return primary[0]
+        return ticker_matches[0]
 
     name_matches = [
         row for row in rows
         if normalize_persian_text(row.get("lVal30", "")) == query
+        and row.get("insCode")
+        and not _is_non_primary(row)
     ]
     if name_matches:
-        primary = [row for row in name_matches if row.get("flow") in {1, 2} and row.get("insCode")]
-        if primary:
-            return primary[0]
+        return name_matches[0]
 
     raise RuntimeError(f"No exact primary TSETMC instrument match for {symbol}")
 
