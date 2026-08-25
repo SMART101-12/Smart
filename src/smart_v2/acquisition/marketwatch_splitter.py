@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-"""Split a raw TSETMC MarketWatch XLSX snapshot into symbol-level raw records."""
+"""Split a raw TSETMC MarketWatch XLSX snapshot into InsCode-keyed raw records."""
 
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-import hashlib
 import gzip
 import io
 import json
@@ -17,15 +16,19 @@ import xml.etree.ElementTree as ET
 @dataclass(frozen=True)
 class RawInstrument:
     symbol_fa: str
-    symbol_key: str
     source_date: str
     fields: dict[str, Any]
     row_number: int
-    ins_code: str | None = None
+    ins_code: str
+    symbol_en: str | None = None
 
 
 class MarketWatchSplitter:
-    """Read a gzip-wrapped XLSX MarketWatch snapshot without mutating source data."""
+    """Read a gzip-wrapped XLSX MarketWatch snapshot without mutating source data.
+
+    Path identity is exclusively ``ins_code``. Symbol names are metadata only.
+    Output layout: <output_root>/<ins_code>/YYYY-MM/YYYY-MM-DD.json
+    """
 
     _NS = {
         "main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
@@ -40,17 +43,9 @@ class MarketWatchSplitter:
         rows = self._read_sheet(gzip.decompress(raw))
         instruments = self._extract_instruments(rows, source_date)
 
-        counts: dict[str, int] = {}
-        for item in instruments:
-            counts[item.symbol_fa] = counts.get(item.symbol_fa, 0) + 1
-        seen: dict[str, int] = {}
         written: list[Path] = []
-
         for item in instruments:
-            seen[item.symbol_fa] = seen.get(item.symbol_fa, 0) + 1
-            suffix = "" if counts[item.symbol_fa] == 1 else f"_{seen[item.symbol_fa]}"
-            folder_key = item.symbol_key + suffix
-            target = output_root / folder_key / source_date[:7] / f"{source_date}.json"
+            target = output_root / item.ins_code / source_date[:7] / f"{source_date}.json"
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(
                 json.dumps(
@@ -58,9 +53,9 @@ class MarketWatchSplitter:
                         "schema_version": "2.0",
                         "dataset_type": "RAW_MARKETWATCH",
                         "instrument": {
-                            "symbol_fa": item.symbol_fa,
-                            "symbol_key": folder_key,
                             "ins_code": item.ins_code,
+                            "symbol_fa": item.symbol_fa,
+                            "symbol_en": item.symbol_en,
                         },
                         "source": {
                             "type": "tsetmc_marketwatch",
@@ -149,36 +144,36 @@ class MarketWatchSplitter:
         if header_pos is None:
             return []
         headers = [str(v).strip() for v in rows[header_pos]]
-        symbol_index = self._find_symbol_index(headers)
-        if symbol_index is None:
-            return []
+        symbol_fa_index = self._find_symbol_fa_index(headers)
         ins_code_index = self._find_ins_code_index(headers)
+        symbol_en_index = self._find_symbol_en_index(headers)
+        if symbol_fa_index is None or ins_code_index is None:
+            return []
 
         result: list[RawInstrument] = []
-        seen_rows: set[str] = set()
+        seen_ins_codes: set[str] = set()
         for row_number, row in enumerate(rows[header_pos + 1 :], start=header_pos + 2):
-            if symbol_index >= len(row):
+            if symbol_fa_index >= len(row) or ins_code_index >= len(row):
                 continue
-            symbol_fa = self._clean_symbol(row[symbol_index])
-            if not symbol_fa:
+            symbol_fa = self._clean_symbol(row[symbol_fa_index])
+            ins_code = str(row[ins_code_index]).strip()
+            if not symbol_fa or not ins_code:
                 continue
+            if ins_code in seen_ins_codes:
+                continue
+            seen_ins_codes.add(ins_code)
+            symbol_en = None
+            if symbol_en_index is not None and symbol_en_index < len(row):
+                symbol_en = self._clean_symbol(row[symbol_en_index]) or None
             fields = {
                 headers[i]: row[i] if i < len(row) else ""
                 for i in range(len(headers))
                 if headers[i]
             }
-            fingerprint = json.dumps(fields, ensure_ascii=False, sort_keys=True)
-            if fingerprint in seen_rows:
-                continue
-            seen_rows.add(fingerprint)
-            ins_code = None
-            if ins_code_index is not None and ins_code_index < len(row):
-                value = str(row[ins_code_index]).strip()
-                ins_code = value or None
             result.append(
                 RawInstrument(
                     symbol_fa=symbol_fa,
-                    symbol_key=self._symbol_key(symbol_fa),
+                    symbol_en=symbol_en,
                     source_date=source_date,
                     fields=fields,
                     row_number=row_number,
@@ -189,10 +184,9 @@ class MarketWatchSplitter:
 
     @classmethod
     def _find_header(cls, rows: list[list[str]]) -> int | None:
-        """Find the first row containing a recognizable symbol header."""
         for pos, row in enumerate(rows[:100]):
             headers = [str(v).strip() for v in row]
-            if cls._find_symbol_index(headers) is not None:
+            if cls._find_ins_code_index(headers) is not None and cls._find_symbol_fa_index(headers) is not None:
                 return pos
         return None
 
@@ -201,14 +195,19 @@ class MarketWatchSplitter:
         return re.sub(r"\s+", "", str(value).strip().lower()).replace("\u200c", "")
 
     @classmethod
-    def _find_symbol_index(cls, headers: list[str]) -> int | None:
-        preferred = {
-            "نماد", "symbol", "symbolfa", "symbolen",
-            "lval18", "l18", "lval18afc",
-        }
+    def _find_symbol_fa_index(cls, headers: list[str]) -> int | None:
+        preferred = {"symbolfa", "نماد", "lval18", "l18", "lval18afc", "symbol"}
         for i, value in enumerate(headers):
             normalized = cls._normalize_header(value)
             if normalized in preferred or "نماد" in normalized:
+                return i
+        return None
+
+    @classmethod
+    def _find_symbol_en_index(cls, headers: list[str]) -> int | None:
+        preferred = {"symbolen"}
+        for i, value in enumerate(headers):
+            if cls._normalize_header(value) in preferred:
                 return i
         return None
 
@@ -223,7 +222,3 @@ class MarketWatchSplitter:
     @staticmethod
     def _clean_symbol(value: str) -> str:
         return str(value or "").strip().replace("\u200c", "")
-
-    @staticmethod
-    def _symbol_key(symbol_fa: str) -> str:
-        return "SYMBOL_" + hashlib.sha1(symbol_fa.encode("utf-8")).hexdigest()[:12].upper()
