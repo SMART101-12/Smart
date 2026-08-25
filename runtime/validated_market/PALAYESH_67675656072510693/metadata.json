@@ -37,8 +37,8 @@
   "quality": {
     "overall_status": "PASS",
     "quality_score": 100.0,
-    "last_validation_run_id": "PALAYESH-VALIDATION-2026-08-19",
-    "last_validation_at": "2026-08-19T09:30:07.728788+00:00",
+    "last_validation_run_id": "PALAYESH-VALIDATION-2026-08-25",
+    "last_validation_at": "2026-08-25T10:03:18.229514+00:00",
     "validation_suite_version": "2.1.0",
     "checks": {
       "date": "PASS",
@@ -53,7 +53,7 @@
   },
   "lineage": {
     "raw_snapshot_version": null,
-    "validated_dataset_version": "PALAYESH-VALIDATION-2026-08-19",
+    "validated_dataset_version": "PALAYESH-VALIDATION-2026-08-25",
     "processed_dataset_versions": [],
     "source_commits": [],
     "transformations": [
@@ -104,6 +104,14 @@
         "target": "runtime/validated_market/PALAYESH_67675656072510693",
         "records": 1427,
         "timestamp": "2026-08-19T09:30:07.728788+00:00"
+      },
+      {
+        "run_id": "PALAYESH-VALIDATION-2026-08-25",
+        "operation": "validate_and_promote",
+        "source": "runtime/history/پالایش",
+        "target": "runtime/validated_market/PALAYESH_67675656072510693",
+        "records": 1427,
+        "timestamp": "2026-08-25T10:03:18.229514+00:00"
       }
     ]
   },
@@ -115,11 +123,12 @@
   "audit": {
     "created_at": "2026-08-19",
     "created_by": "SMART_V2",
-    "last_updated_at": "2026-08-19",
+    "last_updated_at": "2026-08-25",
     "notes": [
       "Observed historical range is not yet certified as gap-free.",
       "No record is considered validated until the V2 validation pipeline passes it.",
       "Raw source data must remain immutable; validated data is a separate derivative layer.",
+      "Validated dataset contains only records from a PASS validation run; raw history remains immutable.",
       "Validated dataset contains only records from a PASS validation run; raw history remains immutable.",
       "Validated dataset contains only records from a PASS validation run; raw history remains immutable.",
       "Validated dataset contains only records from a PASS validation run; raw history remains immutable.",
@@ -177,6 +186,15 @@
     {
       "run_id": "PALAYESH-VALIDATION-2026-08-19",
       "timestamp": "2026-08-19T09:30:07.728788+00:00",
+      "records_tested": 1427,
+      "records_passed": 1427,
+      "records_failed": 0,
+      "missing_expected": [],
+      "status": "PASS"
+    },
+    {
+      "run_id": "PALAYESH-VALIDATION-2026-08-25",
+      "timestamp": "2026-08-25T10:03:18.229514+00:00",
       "records_tested": 1427,
       "records_passed": 1427,
       "records_failed": 0,
