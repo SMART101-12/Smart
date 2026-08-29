@@ -1,0 +1,31 @@
+{
+  "source": "TSETMC",
+  "source_type": "daily_history_monthly_partition",
+  "symbol": "كگل",
+  "requested_symbol": "کگل",
+  "ins_code": 35700344742885862,
+  "period": "1384-05",
+  "record_count": 1,
+  "first_date_gregorian": "2005-08-21",
+  "last_date_gregorian": "2005-08-21",
+  "records": [
+    {
+      "date": "20050821",
+      "high": 11002,
+      "low": 11002,
+      "close": 11002,
+      "last": 11002,
+      "open": 11002,
+      "previous_close": 12172,
+      "value": 11002000,
+      "volume": 1000,
+      "trades": 1,
+      "price_change": -1170.0,
+      "ins_code": 35700344742885862,
+      "date_gregorian": "2005-08-21",
+      "date_jalali": "1384-05-30",
+      "jalali_year": 1384,
+      "jalali_month": 5
+    }
+  ]
+}

@@ -1,56 +1,35 @@
-# Byte-compiled / optimized / C-extension
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Virtual environments
-venv/
+﻿# Virtual Environment
 .venv/
-.venv_old/
-.venv_broken/
-env/
+venv/
 ENV/
 
-# Python Tools / IDEs
-.idea/
-.vscode/
-*.swp
-*.swo
-.DS_Store
+# Python cache & artifacts
+__pycache__/
+*.py[cod]
+*.class
+*.so
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
 
-# Temporary & Dump files
-project_tree.txt
-project_summary.txt
-dump_project.py
-quick_summary.py
-list_structure.py
-compare_versions.py
-
-# Database / Local SQLite
-data/*.db
-data/*.sqlite3
-*.db-journal
-
-# Runtime Generated / Heavy Data (Keep directory structure with .gitkeep)
-runtime/history/
-runtime/history_lookup/
-runtime/market_processed/
-runtime/market_monitored/
-runtime/validated_market/
-runtime/validation_reports/
-runtime/snapshots/
-runtime/tsetmc/
-runtime/بورس_خام/
-runtime/بورس_پالایش/
-runtime/experiments/
-runtime/analysis/
-runtime/data_quality/
-runtime/ai/
-runtime/*.xlsx
-runtime/*.csv
-runtime/*.json
-!runtime/.gitkeep
-
-# Environment variables & secrets
+# Environment Variables & Secrets
 .env
-.env.local
+.env.*
+!.env.example
+
+# Local Data / SQLite / Archives
+*.sqlite
+*.sqlite3
+*.db
+*.zip
+data/
+logs/
+*.log
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

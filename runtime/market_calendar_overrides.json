@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "remove_closed_dates": [],
+  "add_closed_periods": [
+    {
+      "start": "2021-07-25",
+      "end": "2021-07-25",
+      "reason": "COVID-19 nationwide closure; market-wide trading suspended",
+      "scope": "all_markets"
+    },
+    {
+      "start": "2023-03-27",
+      "end": "2023-03-27",
+      "reason": "Verified market closure; user-confirmed",
+      "scope": "all_markets"
+    },
+    {
+      "start": "2024-08-07",
+      "end": "2024-08-07",
+      "reason": "Nationwide heat and energy-management closure; market-wide trading suspended",
+      "scope": "all_markets"
+    },
+    {
+      "start": "2026-07-04",
+      "end": "2026-07-06",
+      "reason": "Market closure; user-confirmed",
+      "scope": "all_markets"
+    }
+  ],
+  "note": "Verified exceptions to the shared market calendar. TSETMC records always take precedence and are never removed."
+}

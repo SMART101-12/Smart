@@ -1,19 +1,21 @@
-from __future__ import annotations
-
-from typing import Any
-
-from smart.tsetmc_adapter import TsetmcAdapter
-
+import pandas as pd
+from typing import Dict, Any
+from .fetchers import TSETMCFetcher, MacroFetcher
+from .adapters import DataAdapter
+from .normalizer import DataNormalizer
 
 class AcquisitionService:
-    """V2 boundary around the existing TSETMC acquisition implementation.
+    def __init__(self, tsetmc_fetcher=None, macro_fetcher=None):
+        self.tsetmc = tsetmc_fetcher or TSETMCFetcher()
+        self.macro = macro_fetcher or MacroFetcher()
+        self.adapter = DataAdapter()
+        self.normalizer = DataNormalizer()
 
-    The existing adapter remains the source of truth for network collection;
-    this service only exposes it to V2 and does not process market data.
-    """
+    def get_stock_data(self) -> pd.DataFrame:
+        raw = self.tsetmc.fetch_market_watch()
+        df = self.adapter.tsetmc_to_dataframe(raw)
+        return self.normalizer.clean_ohlcv(df)
 
-    def __init__(self, adapter: TsetmcAdapter | None = None) -> None:
-        self.adapter = adapter or TsetmcAdapter()
-
-    def collect(self, symbol: str) -> dict[str, Any]:
-        return self.adapter.collect_symbol(symbol)
+    def get_macro_data(self) -> Dict[str, float]:
+        raw = self.macro.fetch_macro_snapshot()
+        return self.adapter.macro_to_dict(raw)

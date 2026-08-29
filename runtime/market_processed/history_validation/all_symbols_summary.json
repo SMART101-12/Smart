@@ -1,0 +1,89 @@
+{
+  "source": "SMART/TSETMC",
+  "processed_at": "2026-08-18T14:29:35.793587+03:30",
+  "universe_count": 10,
+  "success_count": 10,
+  "error_count": 0,
+  "results": [
+    {
+      "symbol": "شپنا",
+      "ins_code": 7745894403636165,
+      "status": "ok",
+      "records": 4327,
+      "months": 218,
+      "large_gaps": 4
+    },
+    {
+      "symbol": "شبندر",
+      "ins_code": 35366681030756042,
+      "status": "ok",
+      "records": 3454,
+      "months": 173,
+      "large_gaps": 2
+    },
+    {
+      "symbol": "شتران",
+      "ins_code": 51617145873056483,
+      "status": "ok",
+      "records": 2355,
+      "months": 118,
+      "large_gaps": 1
+    },
+    {
+      "symbol": "فارس",
+      "ins_code": 25244329144808274,
+      "status": "ok",
+      "records": 3237,
+      "months": 162,
+      "large_gaps": 2
+    },
+    {
+      "symbol": "شستا",
+      "ins_code": 2400322364771558,
+      "status": "ok",
+      "records": 1521,
+      "months": 77,
+      "large_gaps": 1
+    },
+    {
+      "symbol": "فولاد",
+      "ins_code": 46348559193224090,
+      "status": "ok",
+      "records": 4620,
+      "months": 233,
+      "large_gaps": 8
+    },
+    {
+      "symbol": "فملي",
+      "ins_code": 35425587644337450,
+      "status": "ok",
+      "records": 4634,
+      "months": 235,
+      "large_gaps": 8
+    },
+    {
+      "symbol": "كگل",
+      "ins_code": 35700344742885862,
+      "status": "ok",
+      "records": 5020,
+      "months": 263,
+      "large_gaps": 21
+    },
+    {
+      "symbol": "كچاد",
+      "ins_code": 18027801615184692,
+      "status": "ok",
+      "records": 5290,
+      "months": 273,
+      "large_gaps": 19
+    },
+    {
+      "symbol": "عيار",
+      "ins_code": 34144395039913458,
+      "status": "ok",
+      "records": 1970,
+      "months": 99,
+      "large_gaps": 1
+    }
+  ]
+}

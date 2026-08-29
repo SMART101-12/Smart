@@ -1,0 +1,29 @@
+{
+  "schema_version": "2.0",
+  "symbol_fa": "پالایش",
+  "symbol_en": "PALAYESH",
+  "ins_code": "67675656072510693",
+  "date": "2025-02-09",
+  "source_layer": "runtime/history",
+  "validation_run_id": "PALAYESH-VALIDATION-2026-08-25",
+  "validated_at": "2026-08-25T10:03:18.229514+00:00",
+  "record": {
+    "priceChange": 1090.0,
+    "priceMin": 170760.0,
+    "priceMax": 175240.0,
+    "priceYesterday": 170140.0,
+    "priceFirst": 171200.0,
+    "last": false,
+    "id": 0,
+    "insCode": "67675656072510693",
+    "dEven": 20250209,
+    "hEven": 123004,
+    "pClosing": 173830.0,
+    "iClose": false,
+    "yClose": true,
+    "pDrCotVal": 171230.0,
+    "zTotTran": 9452.0,
+    "qTotTran5J": 19537881.0,
+    "qTotCap": 3396346729090.0
+  }
+}

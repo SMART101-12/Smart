@@ -1,0 +1,1003 @@
+{
+  "symbol": "فارس",
+  "ins_code": 25244329144808274,
+  "source_file": "runtime/market_raw/history/فارس/2026-08-18.json",
+  "processed_at": "2026-08-18T14:29:34.360895+03:30",
+  "overall": {
+    "source_record_count": 3237,
+    "valid_record_count": 3237,
+    "invalid_date_count": 0,
+    "duplicate_date_count": 0,
+    "invalid_dates_sample": [],
+    "duplicate_dates_sample": [],
+    "large_gap_count": 2,
+    "large_gaps_sample": [
+      {
+        "from": "2016-03-16",
+        "to": "2016-03-26",
+        "calendar_days": 10
+      },
+      {
+        "from": "2021-03-17",
+        "to": "2021-03-27",
+        "calendar_days": 10
+      }
+    ],
+    "status": "ok"
+  },
+  "month_count": 162,
+  "months": [
+    {
+      "period": "1391-12",
+      "record_count": 7,
+      "first_date_gregorian": "2013-03-10",
+      "last_date_gregorian": "2013-03-18"
+    },
+    {
+      "period": "1392-01",
+      "record_count": 16,
+      "first_date_gregorian": "2013-03-25",
+      "last_date_gregorian": "2013-04-20"
+    },
+    {
+      "period": "1392-02",
+      "record_count": 23,
+      "first_date_gregorian": "2013-04-21",
+      "last_date_gregorian": "2013-05-21"
+    },
+    {
+      "period": "1392-03",
+      "record_count": 19,
+      "first_date_gregorian": "2013-05-22",
+      "last_date_gregorian": "2013-06-19"
+    },
+    {
+      "period": "1392-04",
+      "record_count": 22,
+      "first_date_gregorian": "2013-06-22",
+      "last_date_gregorian": "2013-07-22"
+    },
+    {
+      "period": "1392-05",
+      "record_count": 20,
+      "first_date_gregorian": "2013-07-23",
+      "last_date_gregorian": "2013-08-21"
+    },
+    {
+      "period": "1392-06",
+      "record_count": 21,
+      "first_date_gregorian": "2013-08-24",
+      "last_date_gregorian": "2013-09-22"
+    },
+    {
+      "period": "1392-07",
+      "record_count": 21,
+      "first_date_gregorian": "2013-09-23",
+      "last_date_gregorian": "2013-10-22"
+    },
+    {
+      "period": "1392-08",
+      "record_count": 20,
+      "first_date_gregorian": "2013-10-23",
+      "last_date_gregorian": "2013-11-20"
+    },
+    {
+      "period": "1392-09",
+      "record_count": 21,
+      "first_date_gregorian": "2013-11-23",
+      "last_date_gregorian": "2013-12-21"
+    },
+    {
+      "period": "1392-10",
+      "record_count": 19,
+      "first_date_gregorian": "2013-12-22",
+      "last_date_gregorian": "2014-01-20"
+    },
+    {
+      "period": "1392-11",
+      "record_count": 21,
+      "first_date_gregorian": "2014-01-21",
+      "last_date_gregorian": "2014-02-19"
+    },
+    {
+      "period": "1392-12",
+      "record_count": 20,
+      "first_date_gregorian": "2014-02-22",
+      "last_date_gregorian": "2014-03-19"
+    },
+    {
+      "period": "1393-01",
+      "record_count": 17,
+      "first_date_gregorian": "2014-03-25",
+      "last_date_gregorian": "2014-04-20"
+    },
+    {
+      "period": "1393-02",
+      "record_count": 22,
+      "first_date_gregorian": "2014-04-21",
+      "last_date_gregorian": "2014-05-21"
+    },
+    {
+      "period": "1393-03",
+      "record_count": 19,
+      "first_date_gregorian": "2014-05-24",
+      "last_date_gregorian": "2014-06-21"
+    },
+    {
+      "period": "1393-04",
+      "record_count": 22,
+      "first_date_gregorian": "2014-06-22",
+      "last_date_gregorian": "2014-07-22"
+    },
+    {
+      "period": "1393-05",
+      "record_count": 19,
+      "first_date_gregorian": "2014-07-23",
+      "last_date_gregorian": "2014-08-20"
+    },
+    {
+      "period": "1393-06",
+      "record_count": 23,
+      "first_date_gregorian": "2014-08-23",
+      "last_date_gregorian": "2014-09-22"
+    },
+    {
+      "period": "1393-07",
+      "record_count": 20,
+      "first_date_gregorian": "2014-09-23",
+      "last_date_gregorian": "2014-10-22"
+    },
+    {
+      "period": "1393-08",
+      "record_count": 18,
+      "first_date_gregorian": "2014-10-25",
+      "last_date_gregorian": "2014-11-19"
+    },
+    {
+      "period": "1393-09",
+      "record_count": 20,
+      "first_date_gregorian": "2014-11-22",
+      "last_date_gregorian": "2014-12-20"
+    },
+    {
+      "period": "1393-10",
+      "record_count": 21,
+      "first_date_gregorian": "2014-12-22",
+      "last_date_gregorian": "2015-01-20"
+    },
+    {
+      "period": "1393-11",
+      "record_count": 20,
+      "first_date_gregorian": "2015-01-21",
+      "last_date_gregorian": "2015-02-18"
+    },
+    {
+      "period": "1393-12",
+      "record_count": 20,
+      "first_date_gregorian": "2015-02-21",
+      "last_date_gregorian": "2015-03-18"
+    },
+    {
+      "period": "1394-01",
+      "record_count": 18,
+      "first_date_gregorian": "2015-03-25",
+      "last_date_gregorian": "2015-04-20"
+    },
+    {
+      "period": "1394-02",
+      "record_count": 20,
+      "first_date_gregorian": "2015-04-21",
+      "last_date_gregorian": "2015-05-20"
+    },
+    {
+      "period": "1394-03",
+      "record_count": 21,
+      "first_date_gregorian": "2015-05-23",
+      "last_date_gregorian": "2015-06-21"
+    },
+    {
+      "period": "1394-04",
+      "record_count": 21,
+      "first_date_gregorian": "2015-06-22",
+      "last_date_gregorian": "2015-07-22"
+    },
+    {
+      "period": "1394-05",
+      "record_count": 20,
+      "first_date_gregorian": "2015-07-25",
+      "last_date_gregorian": "2015-08-22"
+    },
+    {
+      "period": "1394-06",
+      "record_count": 23,
+      "first_date_gregorian": "2015-08-23",
+      "last_date_gregorian": "2015-09-22"
+    },
+    {
+      "period": "1394-07",
+      "record_count": 21,
+      "first_date_gregorian": "2015-09-23",
+      "last_date_gregorian": "2015-10-21"
+    },
+    {
+      "period": "1394-08",
+      "record_count": 20,
+      "first_date_gregorian": "2015-10-25",
+      "last_date_gregorian": "2015-11-21"
+    },
+    {
+      "period": "1394-09",
+      "record_count": 20,
+      "first_date_gregorian": "2015-11-22",
+      "last_date_gregorian": "2015-12-21"
+    },
+    {
+      "period": "1394-10",
+      "record_count": 21,
+      "first_date_gregorian": "2015-12-22",
+      "last_date_gregorian": "2016-01-20"
+    },
+    {
+      "period": "1394-11",
+      "record_count": 20,
+      "first_date_gregorian": "2016-01-23",
+      "last_date_gregorian": "2016-02-17"
+    },
+    {
+      "period": "1394-12",
+      "record_count": 19,
+      "first_date_gregorian": "2016-02-20",
+      "last_date_gregorian": "2016-03-16"
+    },
+    {
+      "period": "1395-01",
+      "record_count": 18,
+      "first_date_gregorian": "2016-03-26",
+      "last_date_gregorian": "2016-04-18"
+    },
+    {
+      "period": "1395-02",
+      "record_count": 22,
+      "first_date_gregorian": "2016-04-19",
+      "last_date_gregorian": "2016-05-18"
+    },
+    {
+      "period": "1395-03",
+      "record_count": 20,
+      "first_date_gregorian": "2016-05-21",
+      "last_date_gregorian": "2016-06-19"
+    },
+    {
+      "period": "1395-04",
+      "record_count": 21,
+      "first_date_gregorian": "2016-06-20",
+      "last_date_gregorian": "2016-07-20"
+    },
+    {
+      "period": "1395-05",
+      "record_count": 20,
+      "first_date_gregorian": "2016-07-23",
+      "last_date_gregorian": "2016-08-20"
+    },
+    {
+      "period": "1395-06",
+      "record_count": 21,
+      "first_date_gregorian": "2016-08-21",
+      "last_date_gregorian": "2016-09-19"
+    },
+    {
+      "period": "1395-07",
+      "record_count": 20,
+      "first_date_gregorian": "2016-09-21",
+      "last_date_gregorian": "2016-10-19"
+    },
+    {
+      "period": "1395-08",
+      "record_count": 23,
+      "first_date_gregorian": "2016-10-22",
+      "last_date_gregorian": "2016-11-19"
+    },
+    {
+      "period": "1395-09",
+      "record_count": 18,
+      "first_date_gregorian": "2016-11-21",
+      "last_date_gregorian": "2016-12-19"
+    },
+    {
+      "period": "1395-10",
+      "record_count": 21,
+      "first_date_gregorian": "2016-12-20",
+      "last_date_gregorian": "2017-01-18"
+    },
+    {
+      "period": "1395-11",
+      "record_count": 21,
+      "first_date_gregorian": "2017-01-21",
+      "last_date_gregorian": "2017-02-18"
+    },
+    {
+      "period": "1395-12",
+      "record_count": 20,
+      "first_date_gregorian": "2017-02-19",
+      "last_date_gregorian": "2017-03-18"
+    },
+    {
+      "period": "1396-01",
+      "record_count": 17,
+      "first_date_gregorian": "2017-03-25",
+      "last_date_gregorian": "2017-04-19"
+    },
+    {
+      "period": "1396-02",
+      "record_count": 21,
+      "first_date_gregorian": "2017-04-22",
+      "last_date_gregorian": "2017-05-21"
+    },
+    {
+      "period": "1396-03",
+      "record_count": 21,
+      "first_date_gregorian": "2017-05-22",
+      "last_date_gregorian": "2017-06-21"
+    },
+    {
+      "period": "1396-04",
+      "record_count": 19,
+      "first_date_gregorian": "2017-06-24",
+      "last_date_gregorian": "2017-07-22"
+    },
+    {
+      "period": "1396-05",
+      "record_count": 22,
+      "first_date_gregorian": "2017-07-23",
+      "last_date_gregorian": "2017-08-22"
+    },
+    {
+      "period": "1396-06",
+      "record_count": 20,
+      "first_date_gregorian": "2017-08-23",
+      "last_date_gregorian": "2017-09-20"
+    },
+    {
+      "period": "1396-07",
+      "record_count": 20,
+      "first_date_gregorian": "2017-09-23",
+      "last_date_gregorian": "2017-10-22"
+    },
+    {
+      "period": "1396-08",
+      "record_count": 21,
+      "first_date_gregorian": "2017-10-23",
+      "last_date_gregorian": "2017-11-21"
+    },
+    {
+      "period": "1396-09",
+      "record_count": 21,
+      "first_date_gregorian": "2017-11-22",
+      "last_date_gregorian": "2017-12-20"
+    },
+    {
+      "period": "1396-10",
+      "record_count": 21,
+      "first_date_gregorian": "2017-12-23",
+      "last_date_gregorian": "2018-01-20"
+    },
+    {
+      "period": "1396-11",
+      "record_count": 21,
+      "first_date_gregorian": "2018-01-21",
+      "last_date_gregorian": "2018-02-19"
+    },
+    {
+      "period": "1396-12",
+      "record_count": 19,
+      "first_date_gregorian": "2018-02-21",
+      "last_date_gregorian": "2018-03-19"
+    },
+    {
+      "period": "1397-01",
+      "record_count": 15,
+      "first_date_gregorian": "2018-03-25",
+      "last_date_gregorian": "2018-04-18"
+    },
+    {
+      "period": "1397-02",
+      "record_count": 22,
+      "first_date_gregorian": "2018-04-21",
+      "last_date_gregorian": "2018-05-21"
+    },
+    {
+      "period": "1397-03",
+      "record_count": 18,
+      "first_date_gregorian": "2018-05-22",
+      "last_date_gregorian": "2018-06-20"
+    },
+    {
+      "period": "1397-04",
+      "record_count": 21,
+      "first_date_gregorian": "2018-06-23",
+      "last_date_gregorian": "2018-07-22"
+    },
+    {
+      "period": "1397-05",
+      "record_count": 24,
+      "first_date_gregorian": "2018-07-23",
+      "last_date_gregorian": "2018-08-21"
+    },
+    {
+      "period": "1397-06",
+      "record_count": 20,
+      "first_date_gregorian": "2018-08-25",
+      "last_date_gregorian": "2018-09-22"
+    },
+    {
+      "period": "1397-07",
+      "record_count": 22,
+      "first_date_gregorian": "2018-09-23",
+      "last_date_gregorian": "2018-10-22"
+    },
+    {
+      "period": "1397-08",
+      "record_count": 20,
+      "first_date_gregorian": "2018-10-23",
+      "last_date_gregorian": "2018-11-21"
+    },
+    {
+      "period": "1397-09",
+      "record_count": 19,
+      "first_date_gregorian": "2018-11-24",
+      "last_date_gregorian": "2018-12-19"
+    },
+    {
+      "period": "1397-10",
+      "record_count": 22,
+      "first_date_gregorian": "2018-12-22",
+      "last_date_gregorian": "2019-01-20"
+    },
+    {
+      "period": "1397-11",
+      "record_count": 20,
+      "first_date_gregorian": "2019-01-21",
+      "last_date_gregorian": "2019-02-19"
+    },
+    {
+      "period": "1397-12",
+      "record_count": 20,
+      "first_date_gregorian": "2019-02-20",
+      "last_date_gregorian": "2019-03-19"
+    },
+    {
+      "period": "1398-01",
+      "record_count": 16,
+      "first_date_gregorian": "2019-03-25",
+      "last_date_gregorian": "2019-04-20"
+    },
+    {
+      "period": "1398-02",
+      "record_count": 22,
+      "first_date_gregorian": "2019-04-22",
+      "last_date_gregorian": "2019-05-21"
+    },
+    {
+      "period": "1398-03",
+      "record_count": 18,
+      "first_date_gregorian": "2019-05-22",
+      "last_date_gregorian": "2019-06-19"
+    },
+    {
+      "period": "1398-04",
+      "record_count": 22,
+      "first_date_gregorian": "2019-06-22",
+      "last_date_gregorian": "2019-07-22"
+    },
+    {
+      "period": "1398-05",
+      "record_count": 20,
+      "first_date_gregorian": "2019-07-23",
+      "last_date_gregorian": "2019-08-21"
+    },
+    {
+      "period": "1398-06",
+      "record_count": 20,
+      "first_date_gregorian": "2019-08-24",
+      "last_date_gregorian": "2019-09-22"
+    },
+    {
+      "period": "1398-07",
+      "record_count": 21,
+      "first_date_gregorian": "2019-09-23",
+      "last_date_gregorian": "2019-10-22"
+    },
+    {
+      "period": "1398-08",
+      "record_count": 18,
+      "first_date_gregorian": "2019-10-23",
+      "last_date_gregorian": "2019-11-20"
+    },
+    {
+      "period": "1398-09",
+      "record_count": 21,
+      "first_date_gregorian": "2019-11-23",
+      "last_date_gregorian": "2019-12-21"
+    },
+    {
+      "period": "1398-10",
+      "record_count": 21,
+      "first_date_gregorian": "2019-12-22",
+      "last_date_gregorian": "2020-01-20"
+    },
+    {
+      "period": "1398-11",
+      "record_count": 20,
+      "first_date_gregorian": "2020-01-21",
+      "last_date_gregorian": "2020-02-19"
+    },
+    {
+      "period": "1398-12",
+      "record_count": 19,
+      "first_date_gregorian": "2020-02-22",
+      "last_date_gregorian": "2020-03-18"
+    },
+    {
+      "period": "1399-01",
+      "record_count": 16,
+      "first_date_gregorian": "2020-03-24",
+      "last_date_gregorian": "2020-04-18"
+    },
+    {
+      "period": "1399-02",
+      "record_count": 23,
+      "first_date_gregorian": "2020-04-19",
+      "last_date_gregorian": "2020-05-19"
+    },
+    {
+      "period": "1399-03",
+      "record_count": 17,
+      "first_date_gregorian": "2020-05-20",
+      "last_date_gregorian": "2020-06-16"
+    },
+    {
+      "period": "1399-04",
+      "record_count": 23,
+      "first_date_gregorian": "2020-06-20",
+      "last_date_gregorian": "2020-07-20"
+    },
+    {
+      "period": "1399-05",
+      "record_count": 21,
+      "first_date_gregorian": "2020-07-21",
+      "last_date_gregorian": "2020-08-19"
+    },
+    {
+      "period": "1399-06",
+      "record_count": 20,
+      "first_date_gregorian": "2020-08-22",
+      "last_date_gregorian": "2020-09-20"
+    },
+    {
+      "period": "1399-07",
+      "record_count": 21,
+      "first_date_gregorian": "2020-09-21",
+      "last_date_gregorian": "2020-10-20"
+    },
+    {
+      "period": "1399-08",
+      "record_count": 19,
+      "first_date_gregorian": "2020-10-21",
+      "last_date_gregorian": "2020-11-18"
+    },
+    {
+      "period": "1399-09",
+      "record_count": 21,
+      "first_date_gregorian": "2020-11-21",
+      "last_date_gregorian": "2020-12-19"
+    },
+    {
+      "period": "1399-10",
+      "record_count": 22,
+      "first_date_gregorian": "2020-12-20",
+      "last_date_gregorian": "2021-01-19"
+    },
+    {
+      "period": "1399-11",
+      "record_count": 20,
+      "first_date_gregorian": "2021-01-20",
+      "last_date_gregorian": "2021-02-17"
+    },
+    {
+      "period": "1399-12",
+      "record_count": 20,
+      "first_date_gregorian": "2021-02-20",
+      "last_date_gregorian": "2021-03-17"
+    },
+    {
+      "period": "1400-01",
+      "record_count": 18,
+      "first_date_gregorian": "2021-03-27",
+      "last_date_gregorian": "2021-04-20"
+    },
+    {
+      "period": "1400-02",
+      "record_count": 20,
+      "first_date_gregorian": "2021-04-21",
+      "last_date_gregorian": "2021-05-19"
+    },
+    {
+      "period": "1400-03",
+      "record_count": 21,
+      "first_date_gregorian": "2021-05-22",
+      "last_date_gregorian": "2021-06-21"
+    },
+    {
+      "period": "1400-04",
+      "record_count": 20,
+      "first_date_gregorian": "2021-06-22",
+      "last_date_gregorian": "2021-07-19"
+    },
+    {
+      "period": "1400-05",
+      "record_count": 16,
+      "first_date_gregorian": "2021-07-26",
+      "last_date_gregorian": "2021-08-22"
+    },
+    {
+      "period": "1400-06",
+      "record_count": 23,
+      "first_date_gregorian": "2021-08-23",
+      "last_date_gregorian": "2021-09-22"
+    },
+    {
+      "period": "1400-07",
+      "record_count": 18,
+      "first_date_gregorian": "2021-09-25",
+      "last_date_gregorian": "2021-10-20"
+    },
+    {
+      "period": "1400-08",
+      "record_count": 21,
+      "first_date_gregorian": "2021-10-23",
+      "last_date_gregorian": "2021-11-21"
+    },
+    {
+      "period": "1400-09",
+      "record_count": 22,
+      "first_date_gregorian": "2021-11-22",
+      "last_date_gregorian": "2021-12-21"
+    },
+    {
+      "period": "1400-10",
+      "record_count": 21,
+      "first_date_gregorian": "2021-12-22",
+      "last_date_gregorian": "2022-01-19"
+    },
+    {
+      "period": "1400-11",
+      "record_count": 20,
+      "first_date_gregorian": "2022-01-22",
+      "last_date_gregorian": "2022-02-19"
+    },
+    {
+      "period": "1400-12",
+      "record_count": 19,
+      "first_date_gregorian": "2022-02-20",
+      "last_date_gregorian": "2022-03-19"
+    },
+    {
+      "period": "1401-01",
+      "record_count": 19,
+      "first_date_gregorian": "2022-03-26",
+      "last_date_gregorian": "2022-04-20"
+    },
+    {
+      "period": "1401-02",
+      "record_count": 18,
+      "first_date_gregorian": "2022-04-24",
+      "last_date_gregorian": "2022-05-21"
+    },
+    {
+      "period": "1401-03",
+      "record_count": 21,
+      "first_date_gregorian": "2022-05-22",
+      "last_date_gregorian": "2022-06-21"
+    },
+    {
+      "period": "1401-04",
+      "record_count": 19,
+      "first_date_gregorian": "2022-06-22",
+      "last_date_gregorian": "2022-07-20"
+    },
+    {
+      "period": "1401-05",
+      "record_count": 21,
+      "first_date_gregorian": "2022-07-23",
+      "last_date_gregorian": "2022-08-22"
+    },
+    {
+      "period": "1401-06",
+      "record_count": 21,
+      "first_date_gregorian": "2022-08-23",
+      "last_date_gregorian": "2022-09-21"
+    },
+    {
+      "period": "1401-07",
+      "record_count": 18,
+      "first_date_gregorian": "2022-09-24",
+      "last_date_gregorian": "2022-10-22"
+    },
+    {
+      "period": "1401-08",
+      "record_count": 22,
+      "first_date_gregorian": "2022-10-23",
+      "last_date_gregorian": "2022-11-21"
+    },
+    {
+      "period": "1401-09",
+      "record_count": 22,
+      "first_date_gregorian": "2022-11-22",
+      "last_date_gregorian": "2022-12-21"
+    },
+    {
+      "period": "1401-10",
+      "record_count": 19,
+      "first_date_gregorian": "2022-12-24",
+      "last_date_gregorian": "2023-01-18"
+    },
+    {
+      "period": "1401-11",
+      "record_count": 19,
+      "first_date_gregorian": "2023-01-21",
+      "last_date_gregorian": "2023-02-19"
+    },
+    {
+      "period": "1401-12",
+      "record_count": 19,
+      "first_date_gregorian": "2023-02-20",
+      "last_date_gregorian": "2023-03-19"
+    },
+    {
+      "period": "1402-01",
+      "record_count": 17,
+      "first_date_gregorian": "2023-03-25",
+      "last_date_gregorian": "2023-04-19"
+    },
+    {
+      "period": "1402-02",
+      "record_count": 19,
+      "first_date_gregorian": "2023-04-24",
+      "last_date_gregorian": "2023-05-21"
+    },
+    {
+      "period": "1402-03",
+      "record_count": 21,
+      "first_date_gregorian": "2023-05-22",
+      "last_date_gregorian": "2023-06-21"
+    },
+    {
+      "period": "1402-04",
+      "record_count": 21,
+      "first_date_gregorian": "2023-06-24",
+      "last_date_gregorian": "2023-07-22"
+    },
+    {
+      "period": "1402-05",
+      "record_count": 22,
+      "first_date_gregorian": "2023-07-23",
+      "last_date_gregorian": "2023-08-22"
+    },
+    {
+      "period": "1402-06",
+      "record_count": 19,
+      "first_date_gregorian": "2023-08-23",
+      "last_date_gregorian": "2023-09-20"
+    },
+    {
+      "period": "1402-07",
+      "record_count": 20,
+      "first_date_gregorian": "2023-09-23",
+      "last_date_gregorian": "2023-10-22"
+    },
+    {
+      "period": "1402-08",
+      "record_count": 22,
+      "first_date_gregorian": "2023-10-23",
+      "last_date_gregorian": "2023-11-21"
+    },
+    {
+      "period": "1402-09",
+      "record_count": 20,
+      "first_date_gregorian": "2023-11-22",
+      "last_date_gregorian": "2023-12-20"
+    },
+    {
+      "period": "1402-10",
+      "record_count": 21,
+      "first_date_gregorian": "2023-12-23",
+      "last_date_gregorian": "2024-01-20"
+    },
+    {
+      "period": "1402-11",
+      "record_count": 21,
+      "first_date_gregorian": "2024-01-21",
+      "last_date_gregorian": "2024-02-19"
+    },
+    {
+      "period": "1402-12",
+      "record_count": 19,
+      "first_date_gregorian": "2024-02-20",
+      "last_date_gregorian": "2024-03-18"
+    },
+    {
+      "period": "1403-01",
+      "record_count": 16,
+      "first_date_gregorian": "2024-03-24",
+      "last_date_gregorian": "2024-04-17"
+    },
+    {
+      "period": "1403-02",
+      "record_count": 21,
+      "first_date_gregorian": "2024-04-20",
+      "last_date_gregorian": "2024-05-19"
+    },
+    {
+      "period": "1403-03",
+      "record_count": 19,
+      "first_date_gregorian": "2024-05-20",
+      "last_date_gregorian": "2024-06-19"
+    },
+    {
+      "period": "1403-04",
+      "record_count": 18,
+      "first_date_gregorian": "2024-06-22",
+      "last_date_gregorian": "2024-07-20"
+    },
+    {
+      "period": "1403-05",
+      "record_count": 22,
+      "first_date_gregorian": "2024-07-21",
+      "last_date_gregorian": "2024-08-20"
+    },
+    {
+      "period": "1403-06",
+      "record_count": 18,
+      "first_date_gregorian": "2024-08-21",
+      "last_date_gregorian": "2024-09-18"
+    },
+    {
+      "period": "1403-07",
+      "record_count": 21,
+      "first_date_gregorian": "2024-09-22",
+      "last_date_gregorian": "2024-10-20"
+    },
+    {
+      "period": "1403-08",
+      "record_count": 22,
+      "first_date_gregorian": "2024-10-21",
+      "last_date_gregorian": "2024-11-19"
+    },
+    {
+      "period": "1403-09",
+      "record_count": 21,
+      "first_date_gregorian": "2024-11-20",
+      "last_date_gregorian": "2024-12-18"
+    },
+    {
+      "period": "1403-10",
+      "record_count": 21,
+      "first_date_gregorian": "2024-12-21",
+      "last_date_gregorian": "2025-01-19"
+    },
+    {
+      "period": "1403-11",
+      "record_count": 18,
+      "first_date_gregorian": "2025-01-20",
+      "last_date_gregorian": "2025-02-18"
+    },
+    {
+      "period": "1403-12",
+      "record_count": 20,
+      "first_date_gregorian": "2025-02-19",
+      "last_date_gregorian": "2025-03-18"
+    },
+    {
+      "period": "1404-01",
+      "record_count": 16,
+      "first_date_gregorian": "2025-03-25",
+      "last_date_gregorian": "2025-04-20"
+    },
+    {
+      "period": "1404-02",
+      "record_count": 23,
+      "first_date_gregorian": "2025-04-21",
+      "last_date_gregorian": "2025-05-21"
+    },
+    {
+      "period": "1404-03",
+      "record_count": 18,
+      "first_date_gregorian": "2025-05-24",
+      "last_date_gregorian": "2025-06-21"
+    },
+    {
+      "period": "1404-04",
+      "record_count": 21,
+      "first_date_gregorian": "2025-06-22",
+      "last_date_gregorian": "2025-07-22"
+    },
+    {
+      "period": "1404-05",
+      "record_count": 21,
+      "first_date_gregorian": "2025-07-23",
+      "last_date_gregorian": "2025-08-20"
+    },
+    {
+      "period": "1404-06",
+      "record_count": 20,
+      "first_date_gregorian": "2025-08-23",
+      "last_date_gregorian": "2025-09-22"
+    },
+    {
+      "period": "1404-07",
+      "record_count": 22,
+      "first_date_gregorian": "2025-09-23",
+      "last_date_gregorian": "2025-10-22"
+    },
+    {
+      "period": "1404-08",
+      "record_count": 20,
+      "first_date_gregorian": "2025-10-25",
+      "last_date_gregorian": "2025-11-19"
+    },
+    {
+      "period": "1404-09",
+      "record_count": 21,
+      "first_date_gregorian": "2025-11-22",
+      "last_date_gregorian": "2025-12-21"
+    },
+    {
+      "period": "1404-10",
+      "record_count": 20,
+      "first_date_gregorian": "2025-12-22",
+      "last_date_gregorian": "2026-01-20"
+    },
+    {
+      "period": "1404-11",
+      "record_count": 19,
+      "first_date_gregorian": "2026-01-21",
+      "last_date_gregorian": "2026-02-18"
+    },
+    {
+      "period": "1404-12",
+      "record_count": 18,
+      "first_date_gregorian": "2026-02-21",
+      "last_date_gregorian": "2026-03-18"
+    },
+    {
+      "period": "1405-01",
+      "record_count": 17,
+      "first_date_gregorian": "2026-03-25",
+      "last_date_gregorian": "2026-04-20"
+    },
+    {
+      "period": "1405-02",
+      "record_count": 22,
+      "first_date_gregorian": "2026-04-21",
+      "last_date_gregorian": "2026-05-20"
+    },
+    {
+      "period": "1405-03",
+      "record_count": 21,
+      "first_date_gregorian": "2026-05-23",
+      "last_date_gregorian": "2026-06-21"
+    },
+    {
+      "period": "1405-04",
+      "record_count": 19,
+      "first_date_gregorian": "2026-06-22",
+      "last_date_gregorian": "2026-07-22"
+    },
+    {
+      "period": "1405-05",
+      "record_count": 16,
+      "first_date_gregorian": "2026-07-25",
+      "last_date_gregorian": "2026-08-17"
+    }
+  ]
+}

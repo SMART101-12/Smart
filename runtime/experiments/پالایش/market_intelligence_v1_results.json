@@ -1,0 +1,52 @@
+{
+  "engine_version": "market-intelligence-v1.0",
+  "symbol": "پالایش",
+  "rows": 1427,
+  "samples": 1226,
+  "layers": [
+    "price_trend",
+    "volume",
+    "trade_value",
+    "trade_count",
+    "liquidity_illiquidity",
+    "volatility",
+    "empirical_limit_proximity",
+    "market_regime"
+  ],
+  "excluded_until_historical_data_exists": [
+    "real_legal_flow",
+    "order_book_depth",
+    "queue_imbalance",
+    "news_sentiment",
+    "social_sentiment"
+  ],
+  "model": "two-head gradient boosting: direction classifier + magnitude regressor",
+  "selection": "validation only; frozen OOS after selection",
+  "no_lookahead": true,
+  "validation": {
+    "HGB-balanced": {
+      "mae_pct": 1.9441926236674032,
+      "direction_accuracy_pct": 55.50239234449761,
+      "mean_absolute_move_error_pct": 1.9441926236674032,
+      "n": 209
+    },
+    "HGB-conservative": {
+      "mae_pct": 1.9305904641145701,
+      "direction_accuracy_pct": 55.980861244019145,
+      "mean_absolute_move_error_pct": 1.9305904641145701,
+      "n": 209
+    }
+  },
+  "winner": "HGB-conservative",
+  "oos": {
+    "mae_pct": 1.8888501965419289,
+    "direction_accuracy_pct": 70.13574660633483,
+    "mean_absolute_move_error_pct": 1.8888501965419289,
+    "n": 221
+  },
+  "target": {
+    "direction": "next-day return > 0",
+    "magnitude": "next-day return"
+  },
+  "notes": "Order-book and sentiment are deliberately not proxied as fake historical data. They require point-in-time historical feeds before inclusion."
+}
