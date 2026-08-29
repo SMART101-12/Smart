@@ -1,5 +1,6 @@
 # Initial TSETMC ingestion set.
 # Add/remove symbols here without changing the raw-ingestion code.
+
 شپنا
 شبندر
 شتران

@@ -1,0 +1,28 @@
+{
+  "source": "TSETMC",
+  "source_type": "daily_history",
+  "symbol": "طذوب310",
+  "requested_symbol": "ذوب3",
+  "ins_code": 72052393871894367,
+  "source_url": "https://cdn.tsetmc.com/api/ClosingPrice/GetClosingPriceDailyList/72052393871894367/0",
+  "retrieved_at": "2026-08-25T15:49:53.181719+03:30",
+  "record_count": 1,
+  "first_date": "20140701",
+  "last_date": "20140701",
+  "records": [
+    {
+      "date": "20140701",
+      "high": 0,
+      "low": 0,
+      "close": 1000,
+      "last": 1000,
+      "open": 0,
+      "previous_close": 1000,
+      "value": 0,
+      "volume": 0,
+      "trades": 0,
+      "price_change": 0.0,
+      "ins_code": 72052393871894367
+    }
+  ]
+}
