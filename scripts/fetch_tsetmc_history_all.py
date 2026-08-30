@@ -126,6 +126,21 @@ def already_done(symbol: str, date: str) -> bool:
     return (folder / date).exists() or (folder / f"{date}.json").exists()
 
 
+def existing_status(symbol: str, date: str) -> dict | None:
+    """Return today's prior result so successful work can be resumed."""
+    path = HISTORY_UNIVERSE / f"{date}-all-market.json"
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    for item in payload.get("symbols", []):
+        if item.get("symbol") == symbol:
+            return item
+    return None
+
+
 def save_symbol(symbol: str, resolved: str, ins_code: int, raw_data: dict, records: list[dict], source_url: str, today: str) -> dict:
     folder = OUT / safe_symbol(symbol)
     folder.mkdir(parents=True, exist_ok=True)
@@ -173,7 +188,11 @@ def main() -> int:
     if report_path.exists():
         try:
             old = json.loads(report_path.read_text(encoding="utf-8-sig"))
-            existing = {x["symbol"]: x for x in old.get("symbols", []) if x.get("status") == "ok"}
+            existing = {
+                x["symbol"]: x
+                for x in old.get("symbols", [])
+                if x.get("status") == "ok"
+            }
         except Exception:
             existing = {}
 
@@ -181,6 +200,9 @@ def main() -> int:
     ok_count = error_count = skip_count = 0
 
     for index, symbol in enumerate(symbols, 1):
+        # A successful result is immutable for this run date.  Errors are
+        # retried when --retry-errors is supplied; interrupted runs resume
+        # from the progress file instead of starting over.
         if symbol in existing and not args.retry_errors:
             results.append(existing[symbol])
             skip_count += 1

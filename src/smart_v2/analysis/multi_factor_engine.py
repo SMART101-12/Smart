@@ -21,6 +21,20 @@ class EngineResult:
     symbol: str
     composite: float = 0.0
     factors: List[FactorScore] = field(default_factory=list)
+    decision: str = "HOLD"
+    risk_level: str = "Medium"
+
+    def as_dict(self) -> dict:
+        return {
+            "symbol": self.symbol,
+            "composite": self.composite,
+            "factors": [
+                {"name": item.name, "weight": item.weight, "value": item.value}
+                for item in self.factors
+            ],
+            "decision": self.decision,
+            "risk_level": self.risk_level,
+        }
 
 
 class MultiFactorEngine:
@@ -63,4 +77,56 @@ class MultiFactorEngine:
             factors = [f for f in factors if f.name != "gold_fund"]
         wsum = sum(f.weight for f in factors) or 1.0
         composite = float(sum(f.value * f.weight for f in factors) / wsum)
-        return EngineResult(symbol=symbol, composite=round(composite, 2), factors=factors)
+        composite = round(composite, 2)
+        decision = "BUY" if composite >= 65 else "SELL" if composite <= 35 else "HOLD"
+        risk_level = (
+            "Low"
+            if composite >= 70 or composite <= 30
+            else "Medium"
+            if 45 <= composite <= 55
+            else "High"
+        )
+        return EngineResult(
+            symbol=symbol,
+            composite=composite,
+            factors=factors,
+            decision=decision,
+            risk_level=risk_level,
+        )
+
+    def calculate_composite_score(
+        self,
+        *,
+        technical_score: float = 50.0,
+        fundamental_score: float = 50.0,
+        smart_money_score: float = 50.0,
+        macro_score: float = 50.0,
+        risk_score: float | None = None,
+    ) -> dict:
+        """Compatibility scoring contract for scalar app inputs.
+
+        This method is intentionally separate from :meth:`run`, which consumes
+        an OHLCV frame.  Values are clipped to the documented 0..100 range and
+        the result remains a decision-support score, not an order instruction.
+        """
+
+        values = {
+            "technical": float(np.clip(technical_score, 0, 100)),
+            "fundamental": float(np.clip(fundamental_score, 0, 100)),
+            "smart_money": float(np.clip(smart_money_score, 0, 100)),
+            "macro": float(np.clip(macro_score, 0, 100)),
+        }
+        weights = {"technical": 0.35, "fundamental": 0.25, "smart_money": 0.25, "macro": 0.15}
+        composite = round(sum(values[name] * weights[name] for name in values), 2)
+        if risk_score is None:
+            risk_score = 50.0
+        risk_score = float(np.clip(risk_score, 0, 100))
+        risk_level = "Low" if risk_score <= 33 else "High" if risk_score >= 67 else "Medium"
+        return {
+            "composite_score": composite,
+            "decision": "BUY" if composite >= 65 else "SELL" if composite <= 35 else "HOLD",
+            "risk_level": risk_level,
+            "components": values,
+            "weights": weights,
+            "risk_score": risk_score,
+        }

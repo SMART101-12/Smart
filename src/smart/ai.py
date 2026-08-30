@@ -23,7 +23,7 @@ def ask_model(prompt: str, *, model: str | None = None) -> str:
     """Send a simple request through the Responses API."""
     client = get_client()
     response = client.responses.create(
-        model=model or os.getenv("OPENAI_MODEL", "gpt-5.6"),
+        model=model or os.getenv("OPENAI_MODEL", "gpt-5"),
         input=prompt,
     )
     return response.output_text
@@ -33,5 +33,5 @@ def healthcheck() -> dict[str, Any]:
     """Return configuration status without exposing the API key."""
     return {
         "configured": bool(os.getenv("OPENAI_API_KEY")),
-        "model": os.getenv("OPENAI_MODEL", "gpt-5.6"),
+        "model": os.getenv("OPENAI_MODEL", "gpt-5"),
     }

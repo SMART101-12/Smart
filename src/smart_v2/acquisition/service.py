@@ -19,3 +19,16 @@ class AcquisitionService:
     def get_macro_data(self) -> Dict[str, float]:
         raw = self.macro.fetch_macro_snapshot()
         return self.adapter.macro_to_dict(raw)
+
+
+def get_stock_data() -> pd.DataFrame:
+    """Compatibility convenience function for the V2 pipeline."""
+    return AcquisitionService().get_stock_data()
+
+
+def get_macro_data() -> Dict[str, float]:
+    """Compatibility convenience function for the V2 pipeline."""
+    return AcquisitionService().get_macro_data()
+
+
+__all__ = ["AcquisitionService", "get_stock_data", "get_macro_data"]

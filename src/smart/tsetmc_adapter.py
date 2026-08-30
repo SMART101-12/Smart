@@ -161,9 +161,84 @@ class TsetmcAdapter:
         data = self._get(f"ClientType/GetClientType/{ins_code}/1/0")
         return data.get("clientType", data) if isinstance(data, dict) else data
 
+    def closing_price_daily(self, ins_code: str, market_date: str | int) -> dict[str, Any] | None:
+        """Fetch one daily closing record from TSETMC.
+
+        The single-day endpoint is the important primitive for incremental
+        synchronization.  TSETMC has returned both a dictionary and a
+        one-item list for this endpoint over time, so the response is
+        normalized to one row (or ``None``) here.
+        """
+        raw_date = str(market_date).replace("-", "").replace("/", "").strip()
+        if len(raw_date) != 8 or not raw_date.isdigit():
+            raise ValueError("market_date must be YYYYMMDD or YYYY-MM-DD")
+        data = self._get(f"ClosingPrice/GetClosingPriceDaily/{ins_code}/{raw_date}")
+        value: Any
+        if isinstance(data, dict):
+            value = data.get("closingPriceDaily", data)
+        else:
+            value = data
+        if isinstance(value, list):
+            for row in value:
+                if isinstance(row, dict):
+                    row_date = str(row.get("dEven") or "").replace("-", "").replace("/", "")
+                    if row_date == raw_date:
+                        return row
+            return next((row for row in value if isinstance(row, dict)), None)
+        return value if isinstance(value, dict) else None
+
+    def instrument_calendar(self, ins_code: str) -> list[dict[str, Any]]:
+        """Return the instrument-specific trading calendar when available."""
+        data = self._get(f"ClosingPrice/GetInstrumentCalendar/{ins_code}")
+        rows = data.get("instrumentCalendar", data) if isinstance(data, dict) else data
+        return rows if isinstance(rows, list) else []
+
     def daily_history(self, ins_code: str, top: int = 0) -> list[dict[str, Any]]:
         data = self._get(f"ClosingPrice/GetClosingPriceDailyList/{ins_code}/{top}")
         return data.get("closingPriceDaily", []) if isinstance(data, dict) else data
+
+    def daily_history_incremental(
+        self,
+        ins_code: str,
+        market_dates: list[str | int],
+    ) -> tuple[list[dict[str, Any]], list[str]]:
+        """Fetch only the requested dates and return rows plus unresolved dates."""
+        rows: list[dict[str, Any]] = []
+        unresolved: list[str] = []
+        for value in market_dates:
+            key = str(value).replace("-", "").replace("/", "").strip()
+            try:
+                row = self.closing_price_daily(ins_code, key)
+            except Exception:
+                unresolved.append(key)
+                continue
+            if row is None:
+                unresolved.append(key)
+            else:
+                rows.append(row)
+        return rows, unresolved
+
+    def collect_symbol_incremental(
+        self,
+        symbol: str,
+        *,
+        start_date: Any | None = None,
+        end_date: Any | None = None,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Run the resumable history synchronizer for one symbol.
+
+        Importing lazily avoids a module cycle while keeping the adapter as
+        the single source-specific HTTP boundary.
+        """
+        from .incremental import IncrementalHistorySync
+
+        return IncrementalHistorySync(self).sync(
+            symbol,
+            start_date=start_date,
+            end_date=end_date,
+            dry_run=dry_run,
+        )
 
     def collect_symbol(self, symbol: str) -> dict[str, Any]:
         instrument = self.resolve_symbol(symbol)

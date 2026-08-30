@@ -7,6 +7,11 @@ missing values.
 
 from __future__ import annotations
 
+import os
+import json
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
 from statistics import mean
 from typing import Any
 from urllib.parse import quote
@@ -15,6 +20,16 @@ import httpx
 
 from .signals import smart_money_phase
 from .technical import ema, rsi, sma
+from .technical_analysis import build_features
+from .strategy_lab import (
+    bars_from_rows,
+    build_learning_summary,
+    latest_strategy_decision,
+    walk_forward_exam,
+)
+from .decision_memory import DecisionMemory
+from .archive import safe_symbol
+from smart_v2.analysis.stock_service import StockAnalysisService
 
 BASE = "https://cdn.tsetmc.com/api"
 HEADERS = {"User-Agent": "Mozilla/5.0 SMART/0.1"}
@@ -52,7 +67,7 @@ async def closing_info(ins_code: str) -> dict[str, Any]:
     return data.get("closingPriceInfo", {})
 
 
-async def daily_history(ins_code: str, top: int = 60) -> list[dict[str, Any]]:
+async def daily_history(ins_code: str, top: int = 0) -> list[dict[str, Any]]:
     data = await _get(f"/ClosingPrice/GetClosingPriceDailyList/{ins_code}/{top}")
     return data.get("closingPriceDaily", [])
 
@@ -141,17 +156,152 @@ def _analyze_rows(symbol: str, info: dict[str, Any], current: dict[str, Any], hi
     }
 
 
+def _technical_history(history: list[dict[str, Any]]) -> dict[str, Any]:
+    bars = bars_from_rows(history)
+    features = build_features(bars, horizon=5) if bars else []
+    rows = []
+    public_fields = (
+        "date", "close", "return_1d", "sma5", "sma20", "sma50",
+        "ema12", "ema26", "rsi14", "macd", "macd_signal", "atr14",
+        "volume", "volume_ratio20", "roc20", "drawdown_60", "breakout_up20",
+        "breakout_down20", "composite_score", "prediction",
+    )
+    for index, item in enumerate(features):
+        # Future-return labels are reserved for the exam evaluator and are
+        # never exposed as live decision inputs or sent to the LLM.
+        row = {
+            field: (
+                bars[index].volume
+                if field == "volume"
+                else getattr(item, field)
+            )
+            for field in public_fields
+        }
+        rows.append(row)
+    latest = rows[-1] if rows else {}
+    return {
+        "bars": len(bars),
+        "latest": latest,
+        "history": rows,
+        "method": "point-in-time indicators; future_return_5d is evaluation-only",
+    }
+
+
+async def historical_exam(symbol: str, *, initial_history: int = 20, evaluation_window: int = 30) -> dict[str, Any]:
+    """Fetch the complete available history and run the offline exam."""
+    found = await search_symbol(symbol)
+    ins_code = str(found.get("insCode"))
+    history = await daily_history(ins_code, top=int(os.getenv("TSETMC_HISTORY_TOP", "0")))
+    exam = walk_forward_exam(
+        history,
+        symbol=symbol,
+        initial_history=initial_history,
+        evaluation_window=evaluation_window,
+    )
+    exam["source"] = "TSETMC"
+    exam["ins_code"] = ins_code
+    run_stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    artifact = (
+        Path("runtime/learning")
+        / safe_symbol(symbol)
+        / "exams"
+        / f"{run_stamp}-{uuid.uuid4().hex[:8]}.json"
+    )
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    exam["artifact_path"] = str(artifact)
+    learning_summary = build_learning_summary(exam)
+    learning_artifact = artifact.parent.parent / "strategy_memory.json"
+    learning_summary["artifact_path"] = str(learning_artifact)
+    learning_artifact.write_text(
+        json.dumps(learning_summary, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    exam["learning"] = {
+        "artifact_path": str(learning_artifact),
+        "failure_diagnostics": learning_summary["failure_diagnostics"],
+    }
+    artifact.write_text(
+        json.dumps(exam, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return exam
+
+
 async def analyze_symbol(symbol: str) -> dict[str, Any]:
     found = await search_symbol(symbol)
     ins_code = str(found.get("insCode"))
     info = await instrument_info(ins_code)
     current = await closing_info(ins_code)
-    history = await daily_history(ins_code)
+    try:
+        history = await daily_history(ins_code, top=int(os.getenv("TSETMC_HISTORY_TOP", "0")))
+    except TypeError:
+        # Preserve compatibility with injected/test adapters accepting one arg.
+        history = await daily_history(ins_code)
     flow = await client_type(ins_code)
-    return _analyze_rows(symbol, info, current, history, flow)
+    result = _analyze_rows(symbol, info, current, history, flow)
+    technical_history = _technical_history(history)
+    result["technical_history"] = technical_history
+    try:
+        strategy_decision = latest_strategy_decision(
+            history,
+            symbol=symbol,
+            initial_history=20,
+            horizon=5,
+        )
+    except (TypeError, ValueError, KeyError) as exc:
+        strategy_decision = {
+            "status": "UNAVAILABLE",
+            "error": f"strategy decision unavailable: {exc}",
+        }
+    result["strategy_decision"] = strategy_decision
+    # The first-pass scanner is intentionally lightweight; enrich it with the
+    # downstream, point-in-time analysis service when enough OHLCV rows exist.
+    try:
+        result["analysis"] = StockAnalysisService().analyze(
+            history,
+            symbol=symbol,
+            ins_code=ins_code,
+            include_history_metrics=False,
+        )
+    except (TypeError, ValueError, KeyError) as exc:
+        result["analysis"] = {
+            "status": "UNAVAILABLE",
+            "error": f"downstream analysis unavailable: {exc}",
+        }
+    # Persist the exact point-in-time decision context for later outcome review.
+    decision = result.get("analysis", {})
+    if isinstance(decision, dict):
+        # Keep the public analysis contract self-contained for the dashboard,
+        # MCP clients and the ChatGPT explanation layer.
+        decision["technical_history"] = technical_history
+        decision["strategy_decision"] = strategy_decision
+    try:
+        result["decision_record"] = DecisionMemory().record_decision(
+            symbol,
+            {
+                "as_of": result["technical_history"].get("latest", {}).get("date"),
+                "prediction": strategy_decision.get(
+                    "decision",
+                    result["technical_history"].get("latest", {}).get("prediction"),
+                ),
+                "indicators": result["technical_history"].get("latest", {}),
+                "factor_engine": decision.get("factor_engine", {}),
+                "strategy_decision": strategy_decision,
+            },
+        )
+    except OSError:
+        result["decision_record"] = None
+    return result
 
 
 async def live_initial_analysis(symbols: list[str]) -> dict[str, Any]:
+    # Keep the public pipeline bounded and deterministic for API callers.
+    cleaned_symbols = []
+    for symbol in symbols or []:
+        value = str(symbol).strip()
+        if value and value not in cleaned_symbols:
+            cleaned_symbols.append(value)
+    symbols = cleaned_symbols[:20]
     results: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
     for symbol in symbols:
@@ -159,6 +309,8 @@ async def live_initial_analysis(symbols: list[str]) -> dict[str, Any]:
             results.append(await analyze_symbol(symbol))
         except TSETMCError as exc:
             errors.append({"symbol": symbol, "error": str(exc)})
+        except Exception as exc:  # source adapter failures must be visible, not 500s
+            errors.append({"symbol": symbol, "error": f"unexpected source failure: {exc}"})
 
     results.sort(key=lambda row: (
         row.get("smart_money", {}).get("score", 0) * 0.4
@@ -175,7 +327,7 @@ async def live_initial_analysis(symbols: list[str]) -> dict[str, Any]:
         )
 
     return {
-        "status": "ok" if results else "error",
+        "status": "ok" if results else ("error" if errors else "empty"),
         "stage": "live_initial_analysis",
         "source": "TSETMC",
         "symbols_requested": symbols,

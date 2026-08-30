@@ -28,6 +28,12 @@ data/
 logs/
 *.log
 
+# Generated SMART runtime reports and temporary smoke-test workspaces
+runtime/learning/
+runtime/data_quality/*.json
+tmp-*/
+tmp-*-report.json
+
 # IDE & OS
 .vscode/
 .idea/

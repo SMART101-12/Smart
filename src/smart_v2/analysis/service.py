@@ -2,6 +2,10 @@
 
 from typing import Any
 
+from .gold_fund import GoldFundAnalyzer
+from .multi_factor_engine import MultiFactorEngine
+from .stock_service import StockAnalysisService
+
 
 class AnalysisService:
     """Analysis boundary. Consumes processed datasets and AI outputs only."""
@@ -35,3 +39,21 @@ class AnalysisService:
                 previous_close = float(close)
 
         return output
+
+    def analyze_stock(self, records: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
+        """Run the integrated stock analysis on daily rows."""
+
+        return StockAnalysisService().analyze(records, **kwargs)
+
+    def analyze_history(self, records: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
+        """Alias used by callers that distinguish history from snapshots."""
+
+        return self.analyze_stock(records, **kwargs)
+
+
+__all__ = [
+    "AnalysisService",
+    "GoldFundAnalyzer",
+    "MultiFactorEngine",
+    "StockAnalysisService",
+]

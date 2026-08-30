@@ -14,15 +14,30 @@ class ProcessingService:
 
             processed = dict(item)
             processed["record"] = record
+            def _value(*keys: str) -> Any:
+                zero_value: Any = None
+                for key in keys:
+                    value = record.get(key)
+                    if value not in (None, ""):
+                        try:
+                            if float(value) == 0:
+                                if zero_value is None:
+                                    zero_value = value
+                                continue
+                        except (TypeError, ValueError):
+                            pass
+                        return value
+                return zero_value
+
             processed["processing"] = {
                 "status": "PROCESSED",
                 "derived": {
-                    "close": record.get("pClosing"),
-                    "last_price": record.get("pDrCotVal"),
-                    "price_change": record.get("priceChange"),
-                    "volume": record.get("qTotTran5J"),
-                    "trade_count": record.get("zTotTran"),
-                    "trade_value": record.get("qTotCap"),
+                    "close": _value("pClosing", "priceClosing", "close", "pcl", "pDrCotVal"),
+                    "last_price": _value("pDrCotVal", "last_price", "last", "pl"),
+                    "price_change": _value("priceChange", "price_change", "pc"),
+                    "volume": _value("qTotTran5J", "volume", "tvol", "qtj"),
+                    "trade_count": _value("zTotTran", "trades", "tno"),
+                    "trade_value": _value("qTotCap", "value", "tval", "qtc"),
                 },
             }
 
