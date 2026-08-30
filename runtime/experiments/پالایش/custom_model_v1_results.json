@@ -1,7 +1,7 @@
 {
   "engine_version": "custom-v1.1-direction-plus-magnitude",
   "symbol": "پالایش",
-  "rows": 1425,
+  "rows": 1427,
   "weights": {
     "ma": 0.15,
     "macd": 0.15,
@@ -12,46 +12,46 @@
   "validation_leader": "bb",
   "validation": {
     "equal": {
-      "mae_pct": 2.985444144705748,
-      "direction_accuracy_pct": 52.47933884297521,
-      "mean_absolute_move_error_pct": 2.985818287524051,
-      "n": 242
+      "mae_pct": 2.9885151239043686,
+      "direction_accuracy_pct": 52.2633744855967,
+      "mean_absolute_move_error_pct": 2.9887467316661804,
+      "n": 243
     },
     "trend": {
-      "mae_pct": 3.0172649898491475,
-      "direction_accuracy_pct": 54.54545454545454,
-      "mean_absolute_move_error_pct": 3.017116629051584,
-      "n": 242
+      "mae_pct": 3.0201683447883085,
+      "direction_accuracy_pct": 53.90946502057613,
+      "mean_absolute_move_error_pct": 3.019867988788667,
+      "n": 243
     },
     "momentum": {
-      "mae_pct": 2.8817773055086597,
-      "direction_accuracy_pct": 51.2396694214876,
-      "mean_absolute_move_error_pct": 2.8811616493402563,
-      "n": 242
+      "mae_pct": 2.8848944007600923,
+      "direction_accuracy_pct": 50.617283950617285,
+      "mean_absolute_move_error_pct": 2.8841381784523366,
+      "n": 243
     },
     "ichi": {
-      "mae_pct": 3.1529497336194523,
-      "direction_accuracy_pct": 51.2396694214876,
-      "mean_absolute_move_error_pct": 3.154408992653135,
-      "n": 242
+      "mae_pct": 3.156179062991259,
+      "direction_accuracy_pct": 51.028806584362144,
+      "mean_absolute_move_error_pct": 3.157491951491557,
+      "n": 243
     },
     "bb": {
-      "mae_pct": 2.9466063121116255,
-      "direction_accuracy_pct": 54.958677685950406,
-      "mean_absolute_move_error_pct": 2.947919669699609,
-      "n": 242
+      "mae_pct": 2.9477045995080484,
+      "direction_accuracy_pct": 54.73251028806584,
+      "mean_absolute_move_error_pct": 2.948868924880222,
+      "n": 243
     }
   },
   "oos": {
-    "mae_pct": 3.2771605203971896,
+    "mae_pct": 3.277155460899333,
     "direction_accuracy_pct": 51.953125,
-    "mean_absolute_move_error_pct": 3.27745121619127,
+    "mean_absolute_move_error_pct": 3.2774460558001306,
     "n": 256
   },
   "oos_naive_proxy": {
-    "mae_pct": 3.2231865574516507,
+    "mae_pct": 3.223147547487843,
     "direction_accuracy_pct": 50.0,
-    "mean_absolute_move_error_pct": 3.2232068192735137,
+    "mean_absolute_move_error_pct": 3.22316708516127,
     "n": 256
   },
   "outputs": [
