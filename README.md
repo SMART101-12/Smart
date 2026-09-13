@@ -32,8 +32,13 @@ Workflow:
 - Full-history MACD, RSI, SMA/MA, EMA, ATR, breakout and volume series
 - Chart.js price/MA/EMA, volume and oscillator charts in the browser dashboard
 - 200-strategy research catalog with point-in-time walk-forward exam
+- Per-symbol adaptive long-only entry engine: Ichimoku/MACD/RSI/EMA/SMA
+  weights across daily, weekly, monthly and yearly timeframes
+- Paper-watch promotion requires independent, after-cost validation and frozen-test
+  evidence; a strong test alone never overrides weak validation
 - Automatic decision artifacts and `/api/outcome`/`/api/settle` outcome loop
 - Optional ChatGPT explanation endpoint (`/api/chat`) and MCP `chat_explain`
+- Deterministic parseable contract at `/api/analysis?symbol=...`; OpenAI is optional and only explains the sealed JSON
 - Multi-confirmation Smart Money phase engine
 - Explainable ranking/scanner
 - Read-only MCP tools
@@ -55,6 +60,8 @@ The MCP server is designed to be hosted at `https://<host>/mcp`. After HTTPS dep
 See [`docs/CHATGPT_TEST.md`](docs/CHATGPT_TEST.md) for the exact acceptance test.
 See [`docs/STRATEGY_RESEARCH_200.md`](docs/STRATEGY_RESEARCH_200.md) for the
 200-strategy catalog and no-look-ahead protocol.
+See [`docs/SYMBOL_ADAPTIVE_ENTRY_ENGINE.md`](docs/SYMBOL_ADAPTIVE_ENTRY_ENGINE.md)
+for per-symbol adaptive entry training for فولاد، پالایش، فملی و فجر.
 For a cross-platform setup guide, see [`SETUP_ANY_SYSTEM.md`](SETUP_ANY_SYSTEM.md).
 
 ## Local Windows start
@@ -71,6 +78,39 @@ $env:PYTHONPATH = ".\src"
 
 Open `http://127.0.0.1:8000/`. Set `OPENAI_API_KEY` in a local `.env` (or the
 PowerShell environment) only when the ChatGPT explanation endpoint is needed.
+
+## Operational endpoints
+
+The dashboard now exposes deterministic risk and portfolio helpers alongside
+the market analysis routes:
+
+```text
+GET  /api/status                 local readiness and configured paths
+POST /api/risk/position-size     risk-budget position sizing
+POST /api/portfolio/summary      unrealized P/L and concentration summary
+POST /api/daily-runs             start a checkpointed daily watchlist scan
+GET  /api/daily-runs             list recent reports
+GET  /api/daily-runs/latest     inspect the newest report
+GET  /api/daily-runs/{run_id}    inspect progress or final report
+```
+
+The risk calculator is long-only, includes optional fees/slippage, and caps a
+position by both the account risk budget and maximum allocation. These
+endpoints calculate decision support only; they do not persist or execute
+orders.
+
+Run the same daily cycle without the web server:
+
+```powershell
+$env:PYTHONPATH = ".\src"
+python scripts/run_daily_cycle.py فولاد پالایش فملی فجر
+```
+
+Each run is stored in `runtime/daily_reports.sqlite3`. The worker checkpoints
+after every symbol, keeps provider errors beside successful results, prevents
+two active runs from overlapping, and ranks Top 10 only inside the requested
+watchlist. A report is marked `partial` when data is stale, incomplete, or a
+provider returned an error; stale data is never relabeled as live data.
 
 ## Data-source note
 

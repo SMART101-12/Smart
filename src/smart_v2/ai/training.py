@@ -715,6 +715,40 @@ class AITrainingService:
         record["artifact_path"] = path
         return record
 
+    def train_symbol_entry_profile(
+        self,
+        rows: Iterable[dict[str, Any]],
+        *,
+        symbol: str,
+        years: int = 10,
+        initial_history: int = 20,
+        evaluation_window: int = 30,
+        transaction_cost_pct: float = 0.35,
+        source_metadata: dict[str, Any] | None = None,
+        persist: bool = True,
+    ) -> dict[str, Any]:
+        """Train the per-symbol adaptive long-entry learner.
+
+        The generic ridge forecaster above remains useful for return/direction
+        experiments.  This method adds the trading-oriented layer requested by
+        SMART: per-symbol, multi-timeframe indicator weights, entry-only
+        walk-forward execution and persisted error/success rationale.
+        """
+
+        from smart.symbol_learning import build_symbol_profile
+
+        return build_symbol_profile(
+            rows,
+            symbol=symbol,
+            years=years,
+            initial_history=initial_history,
+            evaluation_window=evaluation_window,
+            transaction_cost_pct=transaction_cost_pct,
+            output_root=self.memory.root,
+            persist=persist,
+            source_metadata=source_metadata,
+        )
+
     def record_outcome(
         self,
         *,

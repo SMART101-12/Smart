@@ -19,6 +19,7 @@ from urllib.parse import quote
 import httpx
 
 from .signals import smart_money_phase
+from .analysis_contract import build_structured_analysis
 from .technical import ema, rsi, sma
 from .technical_analysis import build_features
 from .strategy_lab import (
@@ -29,7 +30,10 @@ from .strategy_lab import (
 )
 from .decision_memory import DecisionMemory
 from .archive import safe_symbol
+from .symbol_learning import FOCUS_SYMBOLS
+from .tsetmc_adapter import TsetmcAdapter
 from smart_v2.analysis.stock_service import StockAnalysisService
+from smart_v2.ai.training import AITrainingService
 
 BASE = "https://cdn.tsetmc.com/api"
 HEADERS = {"User-Agent": "Mozilla/5.0 SMART/0.1"}
@@ -54,7 +58,13 @@ async def search_symbol(symbol: str) -> dict[str, Any]:
     rows = data.get("instrumentSearch", [])
     if not rows:
         raise TSETMCError(f"symbol not found: {symbol}")
-    return rows[0]
+    # Search results can contain rights/options before the ordinary share or
+    # ETF.  Reuse the deterministic resolver shared with the local collector
+    # so the research engine learns from the requested primary instrument.
+    ranked = TsetmcAdapter._rank_search_results(symbol, rows)
+    if not ranked or TsetmcAdapter._is_derivative_or_non_primary(ranked[0]):
+        raise TSETMCError(f"no primary tradable instrument found: {symbol}")
+    return dict(ranked[0])
 
 
 async def instrument_info(ins_code: str) -> dict[str, Any]:
@@ -167,15 +177,29 @@ def _technical_history(history: list[dict[str, Any]]) -> dict[str, Any]:
         "breakout_down20", "composite_score", "prediction",
     )
     for index, item in enumerate(features):
-        # Future-return labels are reserved for the exam evaluator and are
-        # never exposed as live decision inputs or sent to the LLM.
+        # Keep the canonical OHLCV fields available for quality checks and
+        # support/resistance calculations. Future-return labels are reserved
+        # for the exam evaluator and are never exposed here or sent to the LLM.
         row = {
             field: (
                 bars[index].volume
                 if field == "volume"
+                else bars[index].open
+                if field == "open"
+                else bars[index].high
+                if field == "high"
+                else bars[index].low
+                if field == "low"
+                else bars[index].value
+                if field == "value"
+                else bars[index].trades
+                if field == "trades"
                 else getattr(item, field)
             )
-            for field in public_fields
+            for field in (
+                "date", "open", "high", "low", "close", "volume", "value", "trades",
+                *public_fields[2:],
+            )
         }
         rows.append(row)
     latest = rows[-1] if rows else {}
@@ -183,7 +207,7 @@ def _technical_history(history: list[dict[str, Any]]) -> dict[str, Any]:
         "bars": len(bars),
         "latest": latest,
         "history": rows,
-        "method": "point-in-time indicators; future_return_5d is evaluation-only",
+        "method": "point-in-time OHLCV and indicators; future_return_5d is evaluation-only",
     }
 
 
@@ -225,6 +249,94 @@ async def historical_exam(symbol: str, *, initial_history: int = 20, evaluation_
         encoding="utf-8",
     )
     return exam
+
+
+async def symbol_entry_profile(
+    symbol: str,
+    *,
+    years: int = 10,
+    initial_history: int = 20,
+    evaluation_window: int = 30,
+    transaction_cost_pct: float = 0.35,
+    persist: bool = True,
+) -> dict[str, Any]:
+    """Build one independent adaptive long-entry model for a TSETMC symbol."""
+
+    found = await search_symbol(symbol)
+    ins_code = str(found.get("insCode") or "")
+    if not ins_code:
+        raise TSETMCError(f"instrument code unavailable: {symbol}")
+    try:
+        history = await daily_history(ins_code, top=int(os.getenv("TSETMC_HISTORY_TOP", "0")))
+    except TypeError:
+        # Test and custom adapters from earlier SMART versions accept only the
+        # instrument code.  Keep this public route backwards-compatible.
+        history = await daily_history(ins_code)
+    profile = AITrainingService(
+        memory_root=os.getenv("SMART_LEARNING_ROOT", "runtime/learning")
+    ).train_symbol_entry_profile(
+        history,
+        symbol=symbol,
+        years=max(1, min(int(years), 15)),
+        initial_history=max(10, min(int(initial_history), 500)),
+        evaluation_window=max(5, min(int(evaluation_window), 250)),
+        transaction_cost_pct=max(0.0, min(float(transaction_cost_pct), 5.0)),
+        persist=persist,
+        source_metadata={
+            "source": "TSETMC",
+            "ins_code": ins_code,
+            "ticker": found.get("lVal18AFC"),
+            "name": found.get("lVal30"),
+            "resolver": found.get("resolver"),
+        },
+    )
+    return profile
+
+
+async def focus_symbol_profiles(
+    symbols: list[str] | None = None,
+    *,
+    years: int = 10,
+    initial_history: int = 20,
+    evaluation_window: int = 30,
+    transaction_cost_pct: float = 0.35,
+) -> dict[str, Any]:
+    """Train separate profiles for the requested symbols, preserving failures."""
+
+    requested: list[str] = []
+    for item in symbols or list(FOCUS_SYMBOLS):
+        cleaned = str(item or "").strip()
+        if cleaned and cleaned not in requested:
+            requested.append(cleaned)
+    requested = requested[:8]
+    results: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+    for item in requested:
+        try:
+            results.append(
+                await symbol_entry_profile(
+                    item,
+                    years=years,
+                    initial_history=initial_history,
+                    evaluation_window=evaluation_window,
+                    transaction_cost_pct=transaction_cost_pct,
+                )
+            )
+        except Exception as exc:
+            errors.append({"symbol": item, "error": str(exc)})
+    return {
+        "status": "ok" if results else ("error" if errors else "empty"),
+        "stage": "per_symbol_adaptive_entry_training",
+        "symbols_requested": requested,
+        "results": results,
+        "errors": errors,
+        "protocol": {
+            "long_only_entries": True,
+            "candidate_selection": "validation_only",
+            "frozen_test_used_for_selection": False,
+            "default_focus_symbols": list(FOCUS_SYMBOLS),
+        },
+    }
 
 
 async def analyze_symbol(symbol: str) -> dict[str, Any]:
@@ -275,6 +387,12 @@ async def analyze_symbol(symbol: str) -> dict[str, Any]:
         # MCP clients and the ChatGPT explanation layer.
         decision["technical_history"] = technical_history
         decision["strategy_decision"] = strategy_decision
+    # Build the deterministic, machine-readable contract locally.  This is
+    # also the only snapshot that may be sent to the optional language-model
+    # explanation layer.
+    result["structured_analysis"] = build_structured_analysis(result)
+    if isinstance(decision, dict):
+        decision["structured_analysis"] = result["structured_analysis"]
     try:
         result["decision_record"] = DecisionMemory().record_decision(
             symbol,

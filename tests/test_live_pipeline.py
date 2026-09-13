@@ -52,3 +52,5 @@ def test_analyze_symbol_includes_downstream_analysis(monkeypatch):
     monkeypatch.setattr(tsetmc, "StockAnalysisService", lambda: FakeAnalysis())
     result = asyncio.run(tsetmc.analyze_symbol("X"))
     assert result["analysis"]["status"] == "ANALYZED"
+    assert "structured_analysis" in result
+    assert result["structured_analysis"]["provenance"]["future_rows_used_for_current_signal"] is False

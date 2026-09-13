@@ -13,9 +13,15 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from .ai import ask_model, healthcheck
+from .analysis_contract import build_structured_analysis
 from .scanner import Candidate, initial_analysis
 from .sources import source_status
-from .tsetmc import historical_exam, live_initial_analysis
+from .symbol_learning import FOCUS_SYMBOLS, summarize_profile
+from .tsetmc import (
+    historical_exam,
+    live_initial_analysis,
+    symbol_entry_profile as build_symbol_entry_profile,
+)
 from .strategy_lab import latest_strategy_decision, strategy_catalog, strategy_definitions
 
 mcp = FastMCP("SMART Market Intelligence")
@@ -30,8 +36,33 @@ def smart_health() -> dict[str, Any]:
 @mcp.tool()
 async def scan_market(symbols: list[str] | None = None) -> dict[str, Any]:
     """Run a live first-pass analysis from TSETMC for the requested symbols."""
-    symbols = symbols or ["شلرد", "پالایش", "عیار"]
+    symbols = symbols or list(FOCUS_SYMBOLS)
     return await live_initial_analysis(symbols)
+
+
+@mcp.tool()
+async def structured_symbol_analysis(symbol: str) -> dict[str, Any]:
+    """Return one deterministic JSON analysis without calling an LLM."""
+
+    cleaned = str(symbol or "").strip()
+    if not cleaned:
+        return {"status": "error", "error": "symbol is required"}
+    scan = await live_initial_analysis([cleaned])
+    results = scan.get("results") or []
+    if not results:
+        return {
+            "status": "error",
+            "symbol": cleaned,
+            "errors": scan.get("errors", []),
+        }
+    row = results[0]
+    return {
+        "status": "ok",
+        "symbol": cleaned,
+        "source": scan.get("source", "TSETMC"),
+        "analysis": row.get("structured_analysis") or build_structured_analysis(row),
+        "warnings": scan.get("errors", []),
+    }
 
 
 @mcp.tool()
@@ -65,6 +96,31 @@ async def current_strategy_decision(symbol: str) -> dict[str, Any]:
 
 
 @mcp.tool()
+async def symbol_entry_profile(
+    symbol: str,
+    years: int = 10,
+    initial_history: int = 20,
+    evaluation_window: int = 30,
+    transaction_cost_pct: float = 0.35,
+) -> dict[str, Any]:
+    """Train one symbol-specific, long-only adaptive entry profile.
+
+    The returned summary contains the validation-selected configuration,
+    dynamic Ichimoku/MACD/RSI/EMA/SMA weights by timeframe, current entry
+    state, fixed validation/test evidence gates and the persisted audit path.
+    """
+
+    profile = await build_symbol_entry_profile(
+        symbol,
+        years=max(1, min(int(years), 15)),
+        initial_history=max(10, min(int(initial_history), 500)),
+        evaluation_window=max(5, min(int(evaluation_window), 250)),
+        transaction_cost_pct=max(0.0, min(float(transaction_cost_pct), 5.0)),
+    )
+    return summarize_profile(profile) or profile
+
+
+@mcp.tool()
 def list_strategies() -> dict[str, Any]:
     """List the 200 auditable research strategy variants."""
     catalog = strategy_catalog()
@@ -86,8 +142,9 @@ def list_strategies() -> dict[str, Any]:
 
 @mcp.tool()
 def chat_explain(snapshot: dict[str, Any], question: str = "") -> dict[str, Any]:
-    """Ask the configured OpenAI model to explain SMART's structured result."""
+    """Explain a sealed SMART snapshot and return its deterministic contract."""
     enriched = dict(snapshot)
+    enriched["structured_analysis"] = build_structured_analysis(snapshot)
     leaderboard = enriched.get("leaderboard") or (
         enriched.get("walk_forward_exam", {}) if isinstance(enriched.get("walk_forward_exam"), dict) else {}
     ).get("leaderboard", [])
@@ -102,9 +159,17 @@ def chat_explain(snapshot: dict[str, Any], question: str = "") -> dict[str, Any]
         + json.dumps(enriched, ensure_ascii=False, indent=2)
     )
     try:
-        return {"status": "ok", "answer": ask_model(prompt)}
+        return {
+            "status": "ok",
+            "answer": ask_model(prompt),
+            "structured_analysis": enriched["structured_analysis"],
+        }
     except RuntimeError as exc:
-        return {"status": "unavailable", "error": str(exc)}
+        return {
+            "status": "unavailable",
+            "error": str(exc),
+            "structured_analysis": enriched["structured_analysis"],
+        }
 
 
 @mcp.tool()
@@ -123,12 +188,13 @@ async def source_check(url: str, name: str = "custom") -> dict[str, Any]:
 
 @mcp.tool()
 def analyze_snapshot(snapshot: dict[str, Any]) -> str:
-    """Ask the configured OpenAI model to explain a normalized market snapshot."""
+    """Ask the configured model to explain the sealed SMART snapshot."""
+    structured = build_structured_analysis(snapshot)
     prompt = (
         "You are SMART, an explainable Iran capital-market decision-support system. "
         "Analyze the supplied normalized snapshot. Separate facts, signals, risks, "
         "missing data, and confidence. Do not invent prices or claim certainty.\n\n"
-        + json.dumps(snapshot, ensure_ascii=False, indent=2)
+        + json.dumps(structured, ensure_ascii=False, indent=2)
     )
     return ask_model(prompt)
 
