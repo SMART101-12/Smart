@@ -1,0 +1,27 @@
+name: Split AYAR history
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Split AYAR history
+        run: python tools/split_ayar_history.py
+      - name: Package monthly history
+        run: tar -czf ayar-monthly-history.tar.gz -C runtime/market_raw/history/عیار monthly
+      - name: Upload permanent AYAR history artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ayar-monthly-history
+          path: ayar-monthly-history.tar.gz
+          retention-days: 90
+          compression-level: 0

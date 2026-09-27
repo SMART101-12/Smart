@@ -1,0 +1,17 @@
+name: SMART meta ensemble benchmark
+
+on:
+  push:
+    branches: [agent/data-gap-recovery]
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt pytest
+      - run: PYTHONPATH=src pytest -q tests/test_meta_ensemble.py -s

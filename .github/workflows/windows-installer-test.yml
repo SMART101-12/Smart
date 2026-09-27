@@ -1,0 +1,32 @@
+name: SMART Windows installer test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run installer in test mode
+        shell: powershell
+        env:
+          SMART_SKIP_GITHUB_SETUP: '1'
+        run: powershell -ExecutionPolicy Bypass -File .\install-smart.ps1
+      - name: Smoke test installed CLI
+        shell: powershell
+        run: |
+          $env:PATH = "$env:LOCALAPPDATA\SMART\bin;$env:PATH"
+          smart status
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run unit tests
+        shell: powershell
+        run: |
+          python -m pip install -r requirements-iran-agent.txt pytest
+          $env:PYTHONPATH = "$PWD\src"
+          python -m pytest -q
