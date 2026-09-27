@@ -363,6 +363,11 @@ async def analyze_symbol(symbol: str) -> dict[str, Any]:
         history = await daily_history(ins_code)
     flow = await client_type(ins_code)
     result = _analyze_rows(symbol, info, current, history, flow)
+    result["client_type_observation"] = {"date": flow.get("dEven"),
+        "source": "TSETMC ClientType", "buy_individual_volume": _number(flow, "buy_I_Volume", "buyIVolume"),
+        "sell_individual_volume": _number(flow, "sell_I_Volume", "sellIVolume"),
+        "buy_individual_count": _number(flow, "buy_CountI", "buyCountI"),
+        "sell_individual_count": _number(flow, "sell_CountI", "sellCountI")}
     try:
         technical_history = _technical_history(history)
     except ValueError as exc:

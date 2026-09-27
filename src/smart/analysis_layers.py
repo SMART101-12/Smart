@@ -42,6 +42,7 @@ def from_legacy_summary(summary: dict[str, Any], stages: list[dict[str, Any]]) -
     financial_quality = summary.get("fundamental_quality_gate") or {}
     fundamental = summary.get("fundamental") or {}
     flow = summary.get("smart_money") or {}
+    independent_flow = summary.get("flow") or {}
     setup = summary.get("entry_exit") or {}
     backtest = summary.get("self_test") or {}
     risk = summary.get("risk") or {}
@@ -89,9 +90,13 @@ def from_legacy_summary(summary: dict[str, Any], stages: list[dict[str, Any]]) -
                                     + financial_quality.get("blockers", []),
                              data_quality=financial_quality.get("status", "DEGRADED" if fundamental else "UNAVAILABLE"),
                              provenance={"source": fundamental_source} if fundamental_source else {}),
-        "flow": layer(status="PARTIAL" if flow else "UNAVAILABLE",
-                      as_of=market_date, evidence={"smart_money_proxy": flow} if flow else {},
-                      data_quality="DEGRADED" if flow else "UNAVAILABLE",
+        "flow": layer(status="SUCCESS" if independent_flow.get("status") == "SUCCESS" else
+                      "PARTIAL" if independent_flow.get("status") in {"PARTIAL", "CONFLICTING"} or flow else "UNAVAILABLE",
+                      as_of=(independent_flow.get("observed_client_type") or {}).get("as_of") or market_date,
+                      evidence={"analysis": independent_flow, "legacy_smart_money": flow},
+                      errors=independent_flow.get("conflicts", []),
+                      data_quality="MEDIUM" if independent_flow.get("status") == "SUCCESS" else
+                      "DEGRADED" if independent_flow or flow else "UNAVAILABLE",
                       provenance={"source": market_source} if market_source else {}),
         "setup": layer(status=state("entry_exit") if setup else "UNAVAILABLE",
                        as_of=(setup.get("evidence") or {}).get("as_of"),
