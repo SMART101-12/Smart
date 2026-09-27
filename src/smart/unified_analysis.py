@@ -105,6 +105,7 @@ async def run_job(job: dict[str, Any]) -> None:
     from .data_quality_gate import financial_gate, market_gate
     from .market_models import analyze_market_models
     from .market_regime import analyze_market_regime, analyze_industry_regime, load_regime_snapshot
+    from .technical_structure import analyze_technical_structure
     from .strategy_lab import bars_from_rows, walk_forward_exam
     from .symbol_learning import build_symbol_profile
     from .unified_evaluation import evaluate_profile
@@ -253,6 +254,9 @@ async def run_job(job: dict[str, Any]) -> None:
             analyze_market_models, history or [], symbol=symbol)
 
     models = await stage("ten_market_models", ten_models)
+    structure = await stage("technical_structure", lambda: asyncio.to_thread(
+        analyze_technical_structure, history or [], symbol=symbol,
+        as_of=date.fromisoformat(quality_gate["as_of"])))
     structured = (row or {}).get("structured_analysis") or {}
     quality = structured.get("data_quality", {"status": "poor", "issues": ["market_unavailable"]})
     if row and not live_snapshot_available:
@@ -305,6 +309,7 @@ async def run_job(job: dict[str, Any]) -> None:
         "prediction": (profile or {}).get("current_entry") if profile and profile.get("status") == "COMPLETE" else None,
         "entry_exit": levels,
         "market_models": models,
+        "technical_structure": structure,
         "self_test": self_test,
         "risk": structured.get("risk"),
         # The legacy contract's quality-only number is not a calibrated
@@ -347,6 +352,7 @@ async def run_job(job: dict[str, Any]) -> None:
                "self_test": self_test,
                "entry_exit": levels,
                "market_models": models,
+               "technical_structure": structure,
                "layers": summary["layers"], "contract_version": summary["contract_version"],
                "risk": summary["risk"], "missing_data": missing, "warnings": job["warnings"]}
     raw = {"symbol_resolution": found, "market_analysis": row, "history": history,

@@ -46,6 +46,7 @@ def from_legacy_summary(summary: dict[str, Any], stages: list[dict[str, Any]]) -
     backtest = summary.get("self_test") or {}
     risk = summary.get("risk") or {}
     models = summary.get("market_models") or {}
+    structure = summary.get("technical_structure") or {}
     warnings = summary.get("warnings") or []
     def errors(*names: str) -> list[str]:
         return [str(w.get("error")) for w in warnings
@@ -67,11 +68,16 @@ def from_legacy_summary(summary: dict[str, Any], stages: list[dict[str, Any]]) -
                               provenance={"source": market_source} if market_source else {}),
         "market": _regime_layer(summary.get("market"), "broad_market_source_unavailable"),
         "industry": _regime_layer(summary.get("industry"), "industry_source_unavailable"),
-        "technical": layer(status="PARTIAL" if models.get("status") == "available" else "UNAVAILABLE",
-                           as_of=models.get("as_of") if models else None,
+        "technical": layer(status="SUCCESS" if structure.get("status") == "SUCCESS" else
+                           "PARTIAL" if models.get("status") == "available" or structure.get("score_0_100") is not None else "UNAVAILABLE",
+                           as_of=structure.get("as_of") or models.get("as_of"),
                            evidence={"daily_models": models.get("models", []),
-                                     "weekly_monthly_verified": False} if models else {},
-                           data_quality="DEGRADED" if models.get("status") == "available" else "UNAVAILABLE",
+                                     "price_structure": structure,
+                                     "weekly_monthly_verified": all(
+                                         (structure.get("timeframes") or {}).get(t, {}).get("status") == "SUCCESS"
+                                         for t in ("weekly", "monthly"))} if models or structure else {},
+                           data_quality="MEDIUM" if structure.get("status") == "SUCCESS" else
+                           "DEGRADED" if models.get("status") == "available" else "UNAVAILABLE",
                            provenance={"source": market_source} if market_source else {}),
         "fundamental": layer(status="INVALID" if financial_quality.get("status") == "INVALID" else
                              state("fundamental") if fundamental else "UNAVAILABLE",
