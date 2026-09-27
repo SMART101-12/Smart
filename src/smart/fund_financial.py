@@ -100,8 +100,16 @@ def zero_nav_observation(raw: str, period: str, url: str, document_id: str) -> d
 
 
 def fund_financial_evidence(repository: HistoricalDataRepository, symbol: str,
-                            *, fetch_missing: bool = True) -> dict[str, Any]:
-    reports = [report for report in repository.reports(symbol)
+                            *, fetch_missing: bool = True, as_of=None) -> dict[str, Any]:
+    from .data_quality_gate import source_date_cutoff
+    candidates = repository.reports(symbol, selected=False) if as_of is not None else repository.reports(symbol)
+    reports = [report for report in candidates
+               if as_of is None or source_date_cutoff(report["source_date"], as_of=as_of)]
+    chosen = {}
+    for report in sorted(reports, key=lambda r: (r.get("audited", False), r["source_date"],
+                                                 r.get("restated", False), r.get("retrieved_at", ""))):
+        chosen[(report["period"], report["report_type"])] = report
+    reports = [report for report in sorted(chosen.values(), key=lambda r: r["period"])
                if report["report_type"] == "annual" and report["months"] == 12]
     annual = []
     for report in reports[-5:]:

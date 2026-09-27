@@ -185,8 +185,10 @@ async def run_job(job: dict[str, Any]) -> None:
     async def financial():
         repository = HistoricalDataRepository()
         if is_fund:
-            return await asyncio.to_thread(fund_financial_evidence, repository, symbol)
-        return await asyncio.to_thread(FinancialScoringEngine(repository).analyze, symbol)
+            return await asyncio.to_thread(fund_financial_evidence, repository, symbol,
+                                           as_of=date.fromisoformat(quality_gate["as_of"]))
+        return await asyncio.to_thread(FinancialScoringEngine(repository).analyze, symbol,
+                                       as_of=date.fromisoformat(quality_gate["as_of"]))
 
     async def financial_sync():
         from .codal import HistoricalDataSyncManager

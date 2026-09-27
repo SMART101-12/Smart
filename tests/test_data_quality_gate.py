@@ -2,7 +2,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from smart.data_quality_gate import (calculated, financial_gate, market_gate,
+from smart.data_quality_gate import (calculated, financial_gate, market_gate, publication_date,
                                      observed, source_date_cutoff)
 
 
@@ -50,7 +50,11 @@ def test_provenance_distinguishes_observed_and_calculated_values():
         calculated(5, unit="IRR", formula="guess", inputs=[])
     assert source_date_cutoff("2026-09-27", as_of=date(2026, 9, 27))
     assert not source_date_cutoff("2026-09-28", as_of=date(2026, 9, 27))
-    assert not source_date_cutoff("1405/06/20", as_of=date(2026, 9, 27))
+    assert source_date_cutoff("1405/06/20", as_of=date(2026, 9, 27))
+    assert not source_date_cutoff("1405/07/06", as_of=date(2026, 9, 27))
+    assert publication_date("1405/07/05 12:00:00") == date(2026, 9, 27)
+    assert publication_date("۱۴۰۵/۰۷/۰۵") == date(2026, 9, 27)
+    assert publication_date("1405/12/30") is None
 
 
 def test_codal_rate_limit_and_future_publication_are_visible():
@@ -60,8 +64,8 @@ def test_codal_rate_limit_and_future_publication_are_visible():
     partial = financial_gate([report], sync, instrument_type="FUND",
                              as_of=date(2026, 9, 27))
     assert partial["source_status"] == "RATE_LIMITED"
-    assert partial["point_in_time"] is False
-    assert "publication_calendar_unverified" in partial["blockers"]
+    assert partial["point_in_time"] is True
+    assert "codal_source_partial" in partial["blockers"]
     future = financial_gate([{**report, "source_date": "2026-09-28"}],
                             {"status": "SUCCESS"}, instrument_type="EQUITY",
                             as_of=date(2026, 9, 27))

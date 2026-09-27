@@ -47,9 +47,19 @@ class FinancialScoringEngine:
         self.repository = repository
         self.config = config or settings()
 
-    def analyze(self, symbol, basis="standalone"):
+    def analyze(self, symbol, basis="standalone", *, as_of=None):
         repo, years = self.repository, self.config["years"]
-        reports = [r for r in repo.reports(symbol, basis) if r["report_type"] == "annual" and r["months"] == 12]
+        if as_of is None:
+            reports = repo.reports(symbol, basis)
+        else:
+            from .data_quality_gate import source_date_cutoff
+            eligible = [r for r in repo.reports(symbol, basis, selected=False)
+                        if source_date_cutoff(r["source_date"], as_of=as_of)]
+            chosen = {}
+            for report in sorted(eligible, key=lambda r: (r["audited"], r["source_date"], r["restated"], r["retrieved_at"])):
+                chosen[(report["period"], report["report_type"])] = report
+            reports = sorted(chosen.values(), key=lambda r: r["period"])
+        reports = [r for r in reports if r["report_type"] == "annual" and r["months"] == 12]
         reports = reports[-years:]
         last_year = int(reports[-1]["period"][:4]) if reports else None
         slots = list(range(last_year - years + 1, last_year + 1)) if last_year else []

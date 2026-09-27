@@ -8,6 +8,8 @@ from math import isfinite
 from typing import Any
 
 from .archive import deduplicate_rows, parse_market_date
+from persiantools.jdatetime import JalaliDate
+import re
 
 
 def observed(value: float | int | None, *, unit: str, source: str, source_date: str,
@@ -97,8 +99,22 @@ def market_gate(rows: list[dict[str, Any]], *, symbol: str, as_of: date | None =
 
 def source_date_cutoff(value: str, *, as_of: date) -> bool:
     """A source observation is usable only when its publication date is known."""
-    parsed = parse_market_date(value[:10]) if value else None
-    return parsed is not None and 1900 <= parsed.year <= 2100 and parsed <= as_of
+    parsed = publication_date(value)
+    return parsed is not None and parsed <= as_of
+
+
+def publication_date(value: str | None) -> date | None:
+    """Convert explicit Codal Jalali dates; never confuse year 1405 with Gregorian."""
+    raw = str(value or "")[:10].translate(str.maketrans(
+        "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789"))
+    matched = re.fullmatch(r"(1[34]\d{2})[/\-](\d{1,2})[/\-](\d{1,2})", raw)
+    if matched:
+        try:
+            return JalaliDate(*map(int, matched.groups())).to_gregorian()
+        except ValueError:
+            return None
+    parsed = parse_market_date(raw)
+    return parsed if parsed is not None and 1900 <= parsed.year <= 2100 else None
 
 
 def financial_gate(reports: list[dict[str, Any]], sync: dict[str, Any] | None,
@@ -117,8 +133,8 @@ def financial_gate(reports: list[dict[str, Any]], sync: dict[str, Any] | None,
     unverified_publication = []
     for report in reports:
         published = str(report.get("source_date") or "")
-        parsed = parse_market_date(published[:10])
-        if parsed is None or not 1900 <= parsed.year <= 2100:
+        parsed = publication_date(published)
+        if parsed is None:
             unverified_publication.append(str(report.get("document_id") or "unknown"))
         elif parsed > as_of:
             future.append(str(report.get("document_id") or "unknown"))
