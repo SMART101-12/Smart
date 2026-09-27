@@ -120,7 +120,8 @@ def test_exam_uses_recent_history_instead_of_first_decisions(monkeypatch, tmp_pa
     assert result["fundamental"]["equity_score_applicable"] is False
     assert "verified_fund_nav_per_unit" in result["missing_data"]
     assert "verified_five_year_fundamentals" not in result["missing_data"]
-    assert result["entry_exit"]["conditional"] is not None
+    assert result["entry_exit"]["conditional"] is None
+    assert "source_stale_or_unavailable" in result["quality_gate"]["blockers"]
     assert len(result["market_models"]["models"]) == 10
 
 

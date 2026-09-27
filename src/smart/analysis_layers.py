@@ -38,6 +38,8 @@ def from_legacy_summary(summary: dict[str, Any], stages: list[dict[str, Any]]) -
     """Expose honest layer states without changing historical report fields."""
     market_date = summary.get("as_of")
     quality = summary.get("data_quality") or {}
+    gate = summary.get("quality_gate") or {}
+    financial_quality = summary.get("fundamental_quality_gate") or {}
     fundamental = summary.get("fundamental") or {}
     flow = summary.get("smart_money") or {}
     setup = summary.get("entry_exit") or {}
@@ -55,10 +57,13 @@ def from_legacy_summary(summary: dict[str, Any], stages: list[dict[str, Any]]) -
     market_source = summary.get("provenance", {}).get("market")
     fundamental_source = summary.get("provenance", {}).get("fundamental")
     parts = {
-        "data_quality": layer(status="PARTIAL" if quality else "UNAVAILABLE",
-                              as_of=market_date, evidence={"existing_assessment": quality,
-                              "corporate_action_adjustment_verified": False} if quality else {},
-                              data_quality="DEGRADED" if quality else "UNAVAILABLE",
+        "data_quality": layer(status="INVALID" if gate.get("status") == "INVALID" else
+                              "PARTIAL" if quality or gate else "UNAVAILABLE",
+                              as_of=gate.get("latest_valid_date") or market_date,
+                              evidence={"market_gate": gate, "existing_assessment": quality}
+                              if quality or gate else {},
+                              errors=list(gate.get("blockers", [])),
+                              data_quality=gate.get("status", "DEGRADED" if quality else "UNAVAILABLE"),
                               provenance={"source": market_source} if market_source else {}),
         "market": layer(status="UNAVAILABLE", as_of=None,
                         errors=["Verified broad-market regime not integrated"]),
@@ -70,12 +75,15 @@ def from_legacy_summary(summary: dict[str, Any], stages: list[dict[str, Any]]) -
                                      "weekly_monthly_verified": False} if models else {},
                            data_quality="DEGRADED" if models.get("status") == "available" else "UNAVAILABLE",
                            provenance={"source": market_source} if market_source else {}),
-        "fundamental": layer(status=state("fundamental") if fundamental else "UNAVAILABLE",
-                             as_of=None, evidence={"instrument_type": summary.get("instrument_type"),
+        "fundamental": layer(status="INVALID" if financial_quality.get("status") == "INVALID" else
+                             state("fundamental") if fundamental else "UNAVAILABLE",
+                             as_of=None, evidence={"source_gate": financial_quality,
+                                                   "instrument_type": summary.get("instrument_type"),
                                                    "coverage": fundamental.get("coverage", {}),
                                                    "score": fundamental.get("financial_score")},
-                             errors=errors("codal_sync", "fundamental"),
-                             data_quality="DEGRADED" if fundamental else "UNAVAILABLE",
+                             errors=errors("codal_sync", "fundamental_quality_gate", "fundamental")
+                                    + financial_quality.get("blockers", []),
+                             data_quality=financial_quality.get("status", "DEGRADED" if fundamental else "UNAVAILABLE"),
                              provenance={"source": fundamental_source} if fundamental_source else {}),
         "flow": layer(status="PARTIAL" if flow else "UNAVAILABLE",
                       as_of=market_date, evidence={"smart_money_proxy": flow} if flow else {},

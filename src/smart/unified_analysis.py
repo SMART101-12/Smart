@@ -102,6 +102,7 @@ async def run_job(job: dict[str, Any]) -> None:
     from .fund_financial import fund_financial_evidence, is_fund_instrument
     from .conditional_levels import conditional_levels
     from .analysis_layers import from_legacy_summary
+    from .data_quality_gate import financial_gate, market_gate
     from .market_models import analyze_market_models
     from .strategy_lab import bars_from_rows, walk_forward_exam
     from .symbol_learning import build_symbol_profile
@@ -121,7 +122,7 @@ async def run_job(job: dict[str, Any]) -> None:
         try:
             value = await action()
             reported = value.get("status") if isinstance(value, dict) else None
-            state = "PARTIAL" if reported in {"PARTIAL", "SOURCE_UNAVAILABLE", "INSUFFICIENT_HISTORY", "INSUFFICIENT_DATA"} else "COMPLETED"
+            state = "PARTIAL" if reported in {"PARTIAL", "SOURCE_UNAVAILABLE", "INSUFFICIENT_HISTORY", "INSUFFICIENT_DATA", "DEGRADED", "INVALID"} else "COMPLETED"
         except Exception as exc:
             value = None
             state = "NOT_AVAILABLE"
@@ -147,15 +148,19 @@ async def run_job(job: dict[str, Any]) -> None:
     canonical = found.get("lVal18AFC") or symbol
     ins_code = str(found["insCode"])
     is_fund = is_fund_instrument(found)
-    # The existing adapter uses the local incremental history cache.
-    row = await stage("market_and_technical", lambda: tsetmc.analyze_symbol(symbol))
-
     async def fetch_history():
         return await tsetmc.daily_history(ins_code)
 
     history = await stage("historical_data", fetch_history)
+    quality_gate = await stage("data_quality_gate", lambda: asyncio.to_thread(
+        market_gate, history or [], symbol=symbol))
+    critical_market = bool(quality_gate and any(issue in quality_gate["blockers"]
+                           for issue in ("latest_bar_invalid_or_future", "future_dated_source_rows")))
+    # The existing adapter uses the same local incremental history cache.
+    row = None if critical_market else await stage(
+        "market_and_technical", lambda: tsetmc.analyze_symbol(symbol))
     live_snapshot_available = row is not None
-    if row is None and history:
+    if row is None and history and not critical_market:
         async def cached_technical():
             from .analysis_contract import build_structured_analysis
             technical_history = tsetmc._technical_history(history)
@@ -181,7 +186,14 @@ async def run_job(job: dict[str, Any]) -> None:
     sync = await stage("codal_sync", financial_sync)
     if sync and sync.get("status") in {"PARTIAL", "SOURCE_UNAVAILABLE"}:
         job["warnings"].append({"stage": "codal_sync", "error": sync.get("error") or sync["status"]})
-    fundamental = await stage("fundamental", financial)
+    async def verify_financial_source():
+        repository = HistoricalDataRepository()
+        return await asyncio.to_thread(financial_gate, repository.reports(symbol), sync,
+                                       instrument_type="FUND" if is_fund else "EQUITY")
+
+    fundamental_quality = await stage("fundamental_quality_gate", verify_financial_source)
+    fundamental = None if fundamental_quality and fundamental_quality["status"] == "INVALID" else await stage(
+        "fundamental", financial)
     if fundamental and fundamental.get("source_error"):
         job["warnings"].append({"stage": "fundamental", "error": fundamental["source_error"]})
         _write(directory / "job.json", job)
@@ -215,6 +227,11 @@ async def run_job(job: dict[str, Any]) -> None:
     self_test = (evaluation or {}).get("self_test")
 
     async def entry_exit():
+        if not quality_gate or quality_gate["blockers"]:
+            return {"status": "INSUFFICIENT_DATA", "signal_status": "NOT_AVAILABLE",
+                    "reason": "Market data quality gate: " + ", ".join(
+                        (quality_gate or {}).get("blockers", ["source_unavailable"])),
+                    "plan": None, "conditional": None}
         if not history:
             raise ValueError("no historical bars")
         recent = [asdict(bar) for bar in bars_from_rows(history)[-60:]]
@@ -239,6 +256,10 @@ async def run_job(job: dict[str, Any]) -> None:
                                       ("backtest", backtest)) if value is None]
     if not live_snapshot_available:
         missing.extend(("live_market_snapshot", "client_type_flow"))
+    if not quality_gate or quality_gate["blockers"]:
+        missing.append("verified_current_market_data")
+    if fundamental_quality and fundamental_quality["status"] == "INVALID":
+        missing.append("verified_financial_publication")
     if is_fund:
         if not fundamental or fundamental.get("net_asset_value_per_unit") is None:
             missing.append("verified_fund_nav_per_unit")
@@ -260,6 +281,8 @@ async def run_job(job: dict[str, Any]) -> None:
         "instrument_type": "FUND" if is_fund else "EQUITY",
         "tsetmc_id": ins_code, "analysis_id": analysis_id, "engine_version": VERSION,
         "as_of": structured.get("as_of"), "data_quality": quality,
+        "quality_gate": quality_gate,
+        "fundamental_quality_gate": fundamental_quality,
         "technical": {key: value for key, value in structured.items()
                       if key not in {"final_assessment", "scenarios"}} if row else None,
         "smart_money": (row or {}).get("smart_money"),
@@ -300,6 +323,8 @@ async def run_job(job: dict[str, Any]) -> None:
     context = {"instruction": "Use only supplied validated data. Separate observed facts, calculated metrics and uncertainty. Never invent numbers.",
                "analysis_id": analysis_id, "symbol": canonical, "status": status,
                "as_of": summary["as_of"], "data_quality": quality,
+               "quality_gate": quality_gate,
+               "fundamental_quality_gate": fundamental_quality,
                "technical": summary["technical"], "fundamental": fundamental,
                "backtest_status": (backtest or {}).get("status"),
                "long_only_oos": {"metrics": (model_backtest or {}).get("metrics"),
