@@ -8,7 +8,7 @@ import os
 import re
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -104,6 +104,7 @@ async def run_job(job: dict[str, Any]) -> None:
     from .analysis_layers import from_legacy_summary
     from .data_quality_gate import financial_gate, market_gate
     from .market_models import analyze_market_models
+    from .market_regime import analyze_market_regime, analyze_industry_regime, load_regime_snapshot
     from .strategy_lab import bars_from_rows, walk_forward_exam
     from .symbol_learning import build_symbol_profile
     from .unified_evaluation import evaluate_profile
@@ -154,6 +155,13 @@ async def run_job(job: dict[str, Any]) -> None:
     history = await stage("historical_data", fetch_history)
     quality_gate = await stage("data_quality_gate", lambda: asyncio.to_thread(
         market_gate, history or [], symbol=symbol))
+    async def regimes():
+        snapshot = await asyncio.to_thread(load_regime_snapshot)
+        cutoff = date.fromisoformat(quality_gate["as_of"])
+        return {"market": analyze_market_regime(snapshot, as_of=cutoff),
+                "industry": analyze_industry_regime(snapshot, symbol=canonical, as_of=cutoff)}
+
+    regime = await stage("market_industry_regime", regimes)
     critical_market = bool(quality_gate and any(issue in quality_gate["blockers"]
                            for issue in ("latest_bar_invalid_or_future", "future_dated_source_rows")))
     # The existing adapter uses the same local incremental history cache.
@@ -271,6 +279,10 @@ async def run_job(job: dict[str, Any]) -> None:
         missing.extend(("long_only_after_cost_backtest", "frozen_oos_model", "model_self_test"))
     if not models or models.get("status") != "available":
         missing.append("ten_market_models")
+    if not regime or regime["market"]["status"] != "SUCCESS":
+        missing.append("verified_broad_market_regime")
+    if not regime or regime["industry"]["status"] != "SUCCESS":
+        missing.append("verified_historical_industry_regime")
     missing.append("git_publication")
     status = "COMPLETED" if not missing and quality.get("status") == "good" else "PARTIAL"
     evidence_missing = [item for item in missing if item != "git_publication"]
@@ -282,6 +294,8 @@ async def run_job(job: dict[str, Any]) -> None:
         "tsetmc_id": ins_code, "analysis_id": analysis_id, "engine_version": VERSION,
         "as_of": structured.get("as_of"), "data_quality": quality,
         "quality_gate": quality_gate,
+        "market": (regime or {}).get("market"),
+        "industry": (regime or {}).get("industry"),
         "fundamental_quality_gate": fundamental_quality,
         "technical": {key: value for key, value in structured.items()
                       if key not in {"final_assessment", "scenarios"}} if row else None,
@@ -324,6 +338,7 @@ async def run_job(job: dict[str, Any]) -> None:
                "analysis_id": analysis_id, "symbol": canonical, "status": status,
                "as_of": summary["as_of"], "data_quality": quality,
                "quality_gate": quality_gate,
+               "market": summary["market"], "industry": summary["industry"],
                "fundamental_quality_gate": fundamental_quality,
                "technical": summary["technical"], "fundamental": fundamental,
                "backtest_status": (backtest or {}).get("status"),

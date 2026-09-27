@@ -65,10 +65,8 @@ def from_legacy_summary(summary: dict[str, Any], stages: list[dict[str, Any]]) -
                               errors=list(gate.get("blockers", [])),
                               data_quality=gate.get("status", "DEGRADED" if quality else "UNAVAILABLE"),
                               provenance={"source": market_source} if market_source else {}),
-        "market": layer(status="UNAVAILABLE", as_of=None,
-                        errors=["Verified broad-market regime not integrated"]),
-        "industry": layer(status="UNAVAILABLE", as_of=None,
-                          errors=["Verified historical industry regime not integrated"]),
+        "market": _regime_layer(summary.get("market"), "broad_market_source_unavailable"),
+        "industry": _regime_layer(summary.get("industry"), "industry_source_unavailable"),
         "technical": layer(status="PARTIAL" if models.get("status") == "available" else "UNAVAILABLE",
                            as_of=models.get("as_of") if models else None,
                            evidence={"daily_models": models.get("models", []),
@@ -111,3 +109,14 @@ def from_legacy_summary(summary: dict[str, Any], stages: list[dict[str, Any]]) -
     }
     assert tuple(parts) == LAYER_NAMES
     return {"contract_version": CONTRACT_VERSION, "layers": parts}
+
+
+def _regime_layer(value: dict[str, Any] | None, fallback: str) -> dict[str, Any]:
+    value = value or {}
+    success = value.get("status") == "SUCCESS"
+    return layer(status="SUCCESS" if success else "UNAVAILABLE",
+                 as_of=value.get("as_of"), evidence=value.get("evidence") if success else {},
+                 errors=value.get("errors") or ([] if success else [fallback]),
+                 data_quality="MEDIUM" if success else "UNAVAILABLE",
+                 provenance={"declared_source": value["source"],
+                             "independently_authenticated": False} if value.get("source") else {})
