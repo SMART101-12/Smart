@@ -107,6 +107,7 @@ async def run_job(job: dict[str, Any]) -> None:
     from .market_regime import analyze_market_regime, analyze_industry_regime, load_regime_snapshot
     from .technical_structure import analyze_technical_structure
     from .flow_analysis import analyze_flow
+    from .setup_state import assess_setup
     from .strategy_lab import bars_from_rows, walk_forward_exam
     from .symbol_learning import build_symbol_profile
     from .unified_evaluation import evaluate_profile
@@ -264,6 +265,12 @@ async def run_job(job: dict[str, Any]) -> None:
         analyze_flow, history or [], symbol=symbol,
         as_of=date.fromisoformat(quality_gate["as_of"]),
         client_type=(row or {}).get("client_type_observation")))
+    setup_state = await stage("setup_state", lambda: asyncio.to_thread(
+        assess_setup, levels, gate=quality_gate,
+        market=(regime or {}).get("market"), industry=(regime or {}).get("industry"),
+        flow=flow_analysis, technical=structure,
+        model_decision=(self_test or {}).get("decision"),
+        last_close=(structure or {}).get("timeframes", {}).get("daily", {}).get("last_close")))
     structured = (row or {}).get("structured_analysis") or {}
     quality = structured.get("data_quality", {"status": "poor", "issues": ["market_unavailable"]})
     if row and not live_snapshot_available:
@@ -318,6 +325,7 @@ async def run_job(job: dict[str, Any]) -> None:
         "market_models": models,
         "technical_structure": structure,
         "flow": flow_analysis,
+        "setup": setup_state,
         "self_test": self_test,
         "risk": structured.get("risk"),
         # The legacy contract's quality-only number is not a calibrated
@@ -362,6 +370,7 @@ async def run_job(job: dict[str, Any]) -> None:
                "market_models": models,
                "technical_structure": structure,
                "flow": flow_analysis,
+               "setup": setup_state,
                "layers": summary["layers"], "contract_version": summary["contract_version"],
                "risk": summary["risk"], "missing_data": missing, "warnings": job["warnings"]}
     raw = {"symbol_resolution": found, "market_analysis": row, "history": history,

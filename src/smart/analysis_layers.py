@@ -44,6 +44,7 @@ def from_legacy_summary(summary: dict[str, Any], stages: list[dict[str, Any]]) -
     flow = summary.get("smart_money") or {}
     independent_flow = summary.get("flow") or {}
     setup = summary.get("entry_exit") or {}
+    setup_state = summary.get("setup") or {}
     backtest = summary.get("self_test") or {}
     risk = summary.get("risk") or {}
     models = summary.get("market_models") or {}
@@ -98,12 +99,14 @@ def from_legacy_summary(summary: dict[str, Any], stages: list[dict[str, Any]]) -
                       data_quality="MEDIUM" if independent_flow.get("status") == "SUCCESS" else
                       "DEGRADED" if independent_flow or flow else "UNAVAILABLE",
                       provenance={"source": market_source} if market_source else {}),
-        "setup": layer(status=state("entry_exit") if setup else "UNAVAILABLE",
-                       as_of=(setup.get("evidence") or {}).get("as_of"),
-                       evidence={"status": setup.get("signal_status"),
+        "setup": layer(status="SUCCESS" if setup_state.get("state") == "CONFIRMED" else
+                       "PARTIAL" if setup_state else "UNAVAILABLE",
+                       as_of=setup_state.get("as_of"),
+                       evidence={"lifecycle": setup_state,
+                                 "status": setup.get("signal_status"),
                                  "reason": setup.get("reason"),
                                  "conditional": setup.get("conditional")},
-                       errors=errors("entry_exit"),
+                       errors=errors("entry_exit", "setup_state") + setup_state.get("blockers", []),
                        data_quality="DEGRADED" if setup else "UNAVAILABLE",
                        provenance={"source": market_source} if market_source else {}),
         "backtest": layer(status=state("model_self_test") if backtest else "UNAVAILABLE",
