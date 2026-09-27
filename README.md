@@ -114,6 +114,10 @@ provider returned an error; stale data is never relabeled as live data.
 
 ## Data-source note
 
+Historical financial analysis, configuration, provenance rules and current
+acceptance limits are documented in
+[`docs/HISTORICAL_FINANCIAL_LAYER.md`](docs/HISTORICAL_FINANCIAL_LAYER.md).
+
 TSETMC endpoints used by the adapter are community-documented and can change or restrict access. SMART reports source failures explicitly and never fabricates missing market values. Global macro/market proxies are available through the FRED adapter; gold proxy fields are explicitly named and are not silently treated as spot XAU/USD.
 
 ## Security

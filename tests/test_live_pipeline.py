@@ -3,7 +3,10 @@ import asyncio
 from smart import tsetmc
 
 
-def test_live_initial_analysis_deduplicates_limits_and_reports_failures(monkeypatch):
+def test_live_initial_analysis_deduplicates_limits_and_reports_failures(monkeypatch, tmp_path):
+    from smart.codal import HistoricalDataSyncManager
+    monkeypatch.setenv("SMART_HISTORICAL_DB", str(tmp_path / "historical.db"))
+    monkeypatch.setattr(HistoricalDataSyncManager, "sync_financial", lambda *args: {})
     async def fake(symbol):
         if symbol == "BAD":
             raise tsetmc.TSETMCError("unavailable")

@@ -15,8 +15,8 @@ class Bar:
     low: float
     open: float
     volume: float
-    value: float
-    trades: float
+    value: float | None
+    trades: float | None
 
 
 @dataclass

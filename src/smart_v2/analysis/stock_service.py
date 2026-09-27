@@ -18,7 +18,7 @@ import pandas as pd
 from smart.archive import deduplicate_rows, safe_symbol
 from smart.meta_ensemble import evaluate as evaluate_predictions
 from smart.meta_ensemble import predict_at, walk_forward
-from smart.risk import trade_plan
+from .trade_plan import EntryExitEngine
 
 from .multi_factor_engine import MultiFactorEngine
 
@@ -67,14 +67,10 @@ class StockAnalysisService:
         for column in ("open", "high", "low", "close", "volume", "value", "trades"):
             frame[column] = pd.to_numeric(frame.get(column), errors="coerce")
         frame["close"] = frame["close"].where(frame["close"] > 0)
-        # High/low/open are allowed to be absent in older archives.  Filling
-        # them from close is a transparent fallback for indicator geometry,
-        # while the quality report still marks the original field as absent.
-        for column in ("open", "high", "low"):
-            frame[column] = frame[column].where(frame[column].notna(), frame["close"])
-        frame["volume"] = frame["volume"].fillna(0.0).clip(lower=0.0)
-        frame["value"] = frame["value"].fillna(0.0).clip(lower=0.0)
-        frame["trades"] = frame["trades"].fillna(0.0).clip(lower=0.0)
+        # SMART DATA INTEGRITY RULE: do not manufacture candle geometry or
+        # volume. A dependent engine must declare insufficient verified data.
+        if frame[["open", "high", "low", "volume"]].isna().any().any():
+            raise ValueError("Insufficient verified OHLCV data; missing values are not filled")
         frame = frame.dropna(subset=["close"])
         return frame, canonical
 
@@ -155,7 +151,13 @@ class StockAnalysisService:
         include_history_metrics: bool = True,
         max_metrics_rows: int = 750,
     ) -> dict[str, Any]:
-        frame, canonical = self.to_frame(rows, symbol=symbol, ins_code=ins_code)
+        rows = list(rows)
+        try:
+            frame, canonical = self.to_frame(rows, symbol=symbol, ins_code=ins_code)
+        except (ValueError, TypeError, KeyError) as exc:
+            return {"status": "insufficient_data", "symbol": symbol, "ins_code": ins_code,
+                    "decision_support": {"action": "wait", "trade_plan": None,
+                                         "reason": str(exc), "entry_exit": {"status": "insufficient_data"}}}
         nav_series = None
         if nav is not None:
             if isinstance(nav, pd.Series):
@@ -181,13 +183,9 @@ class StockAnalysisService:
                 historical_metrics = evaluate_predictions(predictions)
 
         latest = canonical[-1]
-        close = float(latest["close"])
         atr_value = self._atr(frame)
-        stop = close - 1.5 * atr_value if atr_value > 0 else None
-        target = close + 3.0 * atr_value if atr_value > 0 else None
-        plan = None
-        if stop is not None and target is not None and stop > 0:
-            plan = trade_plan(close, stop, target)
+        entry_exit = EntryExitEngine().generate(canonical, symbol)
+        plan = entry_exit.plan.as_dict() if entry_exit.plan else None
 
         composite = float(engine_result.composite)
         action = (
@@ -217,6 +215,8 @@ class StockAnalysisService:
                 "action": action,
                 "atr": round(atr_value, 8),
                 "trade_plan": plan,
+                "entry_exit": entry_exit.as_dict(),
+                "reason": entry_exit.reason,
                 "disclaimer": "Research signal only; not an execution instruction.",
             },
             "forecast": latest_prediction,

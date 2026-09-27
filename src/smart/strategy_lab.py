@@ -148,7 +148,7 @@ def strategy_definitions(strategy_ids: Iterable[str] | None = None) -> list[dict
     return result
 
 
-def _num(row: dict[str, Any], *keys: str) -> float:
+def _num(row: dict[str, Any], *keys: str) -> float | None:
     for key in keys:
         value = row.get(key)
         if value in (None, "", "-", "NA"):
@@ -159,7 +159,7 @@ def _num(row: dict[str, Any], *keys: str) -> float:
                 return result
         except (TypeError, ValueError):
             pass
-    return 0.0
+    return None
 
 
 def bars_from_rows(rows: Iterable[dict[str, Any]]) -> list[Bar]:
@@ -172,14 +172,17 @@ def bars_from_rows(rows: Iterable[dict[str, Any]]) -> list[Bar]:
         if len(date) != 8 or not date.isdigit():
             continue
         close = _num(row, "pClosing", "close", "pDrCotVal", "priceClosing")
-        if close <= 0:
+        if close is None or close <= 0:
             continue
+        high = _num(row, "pMax", "priceMax", "high")
+        low = _num(row, "pMin", "priceMin", "low")
+        opening = _num(row, "pFirst", "priceFirst", "open")
+        volume = _num(row, "qTotTran5J", "volume", "tvol")
+        if any(v is None for v in (high, low, opening, volume)):
+            raise ValueError("Insufficient verified OHLCV data; missing values are not filled")
         result.append(Bar(
             date=date, close=close,
-            high=_num(row, "pMax", "high", "pClosing") or close,
-            low=_num(row, "pMin", "low", "pClosing") or close,
-            open=_num(row, "pFirst", "open", "pClosing") or close,
-            volume=_num(row, "qTotTran5J", "volume", "tvol"),
+            high=high, low=low, open=opening, volume=volume,
             value=_num(row, "qTotCap", "value"),
             trades=_num(row, "zTotTran", "trades"),
         ))

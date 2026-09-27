@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -10,8 +11,9 @@ from typing import Any
 
 
 class SnapshotStore:
-    def __init__(self, path: str | Path = "data/smart.db") -> None:
-        self.path = Path(path)
+    def __init__(self, path: str | Path | None = None) -> None:
+        self.path = Path(path or os.getenv("SMART_SNAPSHOT_DB") or
+                         Path(os.getenv("SMART_DATA_ROOT", "data")) / "smart.db")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._init()
 

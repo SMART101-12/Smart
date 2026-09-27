@@ -2,6 +2,10 @@
 
 PRIMARY_EXCHANGE = "tsetmc"
 
+# SMART DATA INTEGRITY RULE: every financial number requires traceable source
+# evidence. Never fabricate, interpolate, carry forward or zero-fill missing data.
+NO_DATA_FABRICATION = True
+
 # A proxy is acceptable for discovery/cross-checking, but the report must keep
 # the proxy name and never present it as the exchange itself.
 PROXY_SOURCES = {

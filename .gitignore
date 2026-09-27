@@ -1,5 +1,6 @@
 ﻿# Virtual Environment
 .venv/
+.venv_broken_*/
 venv/
 ENV/
 
@@ -30,6 +31,9 @@ logs/
 
 # Generated SMART runtime reports and temporary smoke-test workspaces
 runtime/learning/
+runtime/analysis_runs/
+runtime/codal_connection/
+github_export/
 runtime/data_quality/*.json
 tmp-*/
 tmp-*-report.json

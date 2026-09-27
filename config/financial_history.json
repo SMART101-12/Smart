@@ -1,0 +1,13 @@
+{
+  "years": 5,
+  "sync_ttl_seconds": 21600,
+  "smart_weight": 0.15,
+  "weights": {
+    "growth": 20,
+    "profitability": 20,
+    "cashFlow": 15,
+    "capitalStructure": 15,
+    "earningsQuality": 15,
+    "stability": 15
+  }
+}

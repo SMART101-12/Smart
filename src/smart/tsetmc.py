@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import json
 import uuid
+import math
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean
@@ -78,8 +79,13 @@ async def closing_info(ins_code: str) -> dict[str, Any]:
 
 
 async def daily_history(ins_code: str, top: int = 0) -> list[dict[str, Any]]:
-    data = await _get(f"/ClosingPrice/GetClosingPriceDailyList/{ins_code}/{top}")
-    return data.get("closingPriceDaily", [])
+    from .market_history import repository_history
+    return await repository_history(ins_code, _get, top=top)
+
+
+def _register_history_identity(symbol, ins_code):
+    from .financial_history import HistoricalDataRepository
+    HistoricalDataRepository().register_instrument(symbol, ins_code)
 
 
 async def client_type(ins_code: str) -> dict[str, Any]:
@@ -94,7 +100,9 @@ def _number(row: dict[str, Any], *keys: str) -> float | None:
         if value is None or value == "":
             continue
         try:
-            return float(value)
+            parsed = float(value)
+            if math.isfinite(parsed):
+                return parsed
         except (TypeError, ValueError):
             continue
     return None
@@ -105,24 +113,26 @@ def _analyze_rows(symbol: str, info: dict[str, Any], current: dict[str, Any], hi
     volumes = [v for v in (_number(r, "qTotTran5J", "volume", "qTotTran") for r in reversed(history)) if v is not None]
     price = _number(current, "pDrCotVal", "pl", "last") or _number(current, "pClosing", "pc", "close")
     previous = closes[-2] if len(closes) >= 2 else None
-    change_pct = ((price - previous) / previous * 100) if price and previous else 0.0
+    change_pct = ((price - previous) / previous * 100) if price is not None and previous else None
     avg_volume = mean(volumes[-20:]) if len(volumes) >= 20 else (mean(volumes) if volumes else None)
     current_volume = _number(current, "qTotTran5J", "qTotTran", "volume")
-    volume_ratio = current_volume / avg_volume if current_volume and avg_volume else 1.0
+    volume_ratio = current_volume / avg_volume if current_volume is not None and avg_volume else None
 
-    buy_i = _number(flow, "buy_I_Volume", "buyIVolume") or 0.0
-    sell_i = _number(flow, "sell_I_Volume", "sellIVolume") or 0.0
-    buy_n = _number(flow, "buy_N_Volume", "buyNVolume") or 0.0
-    sell_n = _number(flow, "sell_N_Volume", "sellNVolume") or 0.0
-    retail_power = (buy_i / max(buy_n, 1.0)) / max(sell_i / max(sell_n, 1.0), 1e-9)
-    net_retail = buy_i - sell_i
-    money_flow_score = max(0.0, min(100.0, 50.0 + (net_retail / max(buy_i + sell_i, 1.0)) * 50.0))
+    buy_i = _number(flow, "buy_I_Volume", "buyIVolume")
+    sell_i = _number(flow, "sell_I_Volume", "sellIVolume")
+    buy_count = _number(flow, "buy_CountI", "buyCountI")
+    sell_count = _number(flow, "sell_CountI", "sellCountI")
+    retail_power = ((buy_i / buy_count) / (sell_i / sell_count)
+                    if all(v is not None and v > 0 for v in (buy_i, sell_i, buy_count, sell_count)) else None)
+    net_retail = buy_i - sell_i if buy_i is not None and sell_i is not None else None
+    money_flow_score = (max(0.0, min(100.0, 50.0 + net_retail / (buy_i + sell_i) * 50.0))
+                        if net_retail is not None and buy_i + sell_i > 0 else None)
     smart = smart_money_phase(
         price_change_pct=change_pct,
         volume_ratio=volume_ratio,
         money_flow_score=money_flow_score,
         retail_buy_power=retail_power,
-    )
+    ) if all(v is not None for v in (change_pct, volume_ratio, money_flow_score, retail_power)) else None
 
     tech_score = 50.0
     if len(closes) >= 20 and price:
@@ -143,20 +153,20 @@ def _analyze_rows(symbol: str, info: dict[str, Any], current: dict[str, Any], hi
         "symbol": symbol,
         "ins_code": info.get("insCode") or info.get("insCode"),
         "price": price,
-        "change_pct": round(change_pct, 2),
+        "change_pct": round(change_pct, 2) if change_pct is not None else None,
         "volume": current_volume,
-        "volume_ratio": round(volume_ratio, 2),
+        "volume_ratio": round(volume_ratio, 2) if volume_ratio is not None else None,
         "retail_net_volume": net_retail,
-        "retail_buy_power": round(retail_power, 2),
-        "money_flow_score": round(money_flow_score, 2),
+        "retail_buy_power": round(retail_power, 2) if retail_power is not None else None,
+        "money_flow_score": round(money_flow_score, 2) if money_flow_score is not None else None,
         "smart_money": {
-            "phase": smart.phase,
-            "score": smart.score,
-            "confirmations": list(smart.confirmations),
-            "warnings": list(smart.warnings),
+            "phase": smart.phase if smart else "unknown",
+            "score": smart.score if smart else None,
+            "confirmations": list(smart.confirmations) if smart else [],
+            "warnings": list(smart.warnings) if smart else ["Insufficient verified money-flow data"],
         },
         "technical": {
-            "score": round(max(0.0, min(100.0, tech_score)), 2),
+            "score": round(max(0.0, min(100.0, tech_score)), 2) if len(closes) >= 20 and price is not None else None,
             "rsi14": round(rsi_value, 2) if rsi_value is not None else None,
             "sma20": round(sma(closes, 20), 2) if len(closes) >= 20 else None,
             "ema20": round(ema(closes, 20), 2) if len(closes) >= 20 else None,
@@ -215,6 +225,7 @@ async def historical_exam(symbol: str, *, initial_history: int = 20, evaluation_
     """Fetch the complete available history and run the offline exam."""
     found = await search_symbol(symbol)
     ins_code = str(found.get("insCode"))
+    _register_history_identity(symbol, ins_code)
     history = await daily_history(ins_code, top=int(os.getenv("TSETMC_HISTORY_TOP", "0")))
     exam = walk_forward_exam(
         history,
@@ -342,6 +353,7 @@ async def focus_symbol_profiles(
 async def analyze_symbol(symbol: str) -> dict[str, Any]:
     found = await search_symbol(symbol)
     ins_code = str(found.get("insCode"))
+    _register_history_identity(symbol, ins_code)
     info = await instrument_info(ins_code)
     current = await closing_info(ins_code)
     try:
@@ -351,7 +363,10 @@ async def analyze_symbol(symbol: str) -> dict[str, Any]:
         history = await daily_history(ins_code)
     flow = await client_type(ins_code)
     result = _analyze_rows(symbol, info, current, history, flow)
-    technical_history = _technical_history(history)
+    try:
+        technical_history = _technical_history(history)
+    except ValueError as exc:
+        technical_history = {"status": "UNAVAILABLE", "error": str(exc), "history": [], "latest": {}}
     result["technical_history"] = technical_history
     try:
         strategy_decision = latest_strategy_decision(
@@ -430,19 +445,28 @@ async def live_initial_analysis(symbols: list[str]) -> dict[str, Any]:
         except Exception as exc:  # source adapter failures must be visible, not 500s
             errors.append({"symbol": symbol, "error": f"unexpected source failure: {exc}"})
 
-    results.sort(key=lambda row: (
-        row.get("smart_money", {}).get("score", 0) * 0.4
-        + row.get("technical", {}).get("score", 0) * 0.35
-        + row.get("data_quality", 0) * 0.25
-    ), reverse=True)
-    for rank, row in enumerate(results, start=1):
-        row["rank"] = rank
-        row["overall_score"] = round(
+    from .financial_history import HistoricalDataRepository
+    from .financial_scoring import FinancialScoringEngine, integrate_financial_score
+    from .codal import HistoricalDataSyncManager
+    import asyncio
+
+    repository = HistoricalDataRepository()
+    for row in results:
+        await asyncio.to_thread(HistoricalDataSyncManager(repository).sync_financial, row["symbol"])
+        financial = FinancialScoringEngine(repository).analyze(row["symbol"])
+        row["financial_history"] = financial
+        base_score = round(
             row["smart_money"]["score"] * 0.4
             + row["technical"]["score"] * 0.35
             + row["data_quality"] * 0.25,
             2,
-        )
+        ) if row["smart_money"]["score"] is not None and row["technical"]["score"] is not None else None
+        row["score_components"] = integrate_financial_score(base_score, financial)
+        row["overall_score"] = row["score_components"]["score"]
+        row["historical_market_sync"] = repository.state(str(row.get("ins_code", "")), "TSETMC")
+    results.sort(key=lambda row: (row["overall_score"] is not None, row["overall_score"] or 0), reverse=True)
+    for rank, row in enumerate(results, start=1):
+        row["rank"] = rank
 
     return {
         "status": "ok" if results else ("error" if errors else "empty"),

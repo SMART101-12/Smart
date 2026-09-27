@@ -33,6 +33,36 @@ from .tsetmc import (
 app = FastAPI(title="SMART Market Intelligence", version="0.5.0")
 
 
+@app.get("/api/financial-history")
+def financial_history(symbol: str = Query(min_length=1, max_length=80),
+                      sync: bool = True, basis: str = "standalone"):
+    from .financial_history import HistoricalDataRepository
+    from .financial_scoring import FinancialScoringEngine
+    from .codal import HistoricalDataSyncManager
+    if basis not in {"standalone", "consolidated"}:
+        raise HTTPException(400, "Invalid consolidation basis")
+    repository = HistoricalDataRepository()
+    if sync:
+        HistoricalDataSyncManager(repository).sync_financial(symbol)
+    return FinancialScoringEngine(repository).analyze(symbol, basis)
+
+
+@app.get("/api/financial-history/audit")
+def financial_history_audit(symbol: str = Query(min_length=1, max_length=80)):
+    from .financial_history import HistoricalDataRepository
+    repo = HistoricalDataRepository()
+    return {"symbol": symbol, "sync_log": repo.audit(symbol),
+            "versions": [r for basis in ("standalone", "consolidated")
+                         for r in repo.reports(symbol, basis, selected=False)]}
+
+
+@app.get("/financial-history.js")
+def financial_history_script():
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+    return FileResponse(Path(__file__).with_name("financial-history.js"), media_type="text/javascript")
+
+
 class OutcomeRequest(BaseModel):
     symbol: str
     decision_id: str
@@ -68,6 +98,18 @@ class PositionSizeRequest(BaseModel):
 
 class PortfolioRequest(BaseModel):
     positions: list[dict]
+
+
+class TradePlanRequest(BaseModel):
+    symbol: str
+    tf: str = "1d"
+    records: list[dict]
+
+
+@app.post("/api/trade-plan")
+def calculate_trade_plan(request: TradePlanRequest) -> dict:
+    from smart_v2.analysis.service import AnalysisService
+    return AnalysisService().trade_plan(request.records, request.symbol, request.tf)
 
 
 class DailyRunRequest(BaseModel):
@@ -452,6 +494,7 @@ def home():
     <div class="toolbar">
       <input id="symbols" value="فولاد,پالایش,فملی,فجر" aria-label="نمادها">
       <button onclick="runScan()">تحلیل نمادها</button>
+      <button class="secondary" onclick="loadFinancial(document.getElementById('symbols').value.split(',')[0].trim(),'financialPanel')">تحلیل مالی ۵ ساله</button>
       <button class="secondary" onclick="runDailyRun()">گزارش روزانه</button>
       <button class="secondary" onclick="loadDailyRuns()">سوابق گزارش‌ها</button>
       <button class="secondary" onclick="runExam()">آزمون walk-forward</button>
@@ -478,6 +521,7 @@ def home():
     <div id="riskResult" class="muted" style="margin-top:10px"></div>
   </div>
   <div id="cards" class="grid"></div>
+  <div id="financialPanel"></div>
   <div id="chatCard" class="card hidden"><h2>توضیح هوش مصنوعی</h2><div id="chatAnswer"></div></div>
   <script>
     let charts=[];
@@ -534,6 +578,8 @@ def home():
         const fa=sa.final_assessment||{}, tr=sa.trend||{}, risk=sa.risk||{};
         return `<div class="card">
           <h2>${esc(x.symbol)} <span class="pill">${esc(f.decision||'N/A')}</span></h2>
+          <button class="secondary" onclick="loadFinancial(decodeURIComponent('${encodeURIComponent(x.symbol)}'),'finance-${i}')">📊 تحلیل مالی</button>
+          <div id="finance-${i}"></div>
           <div class="score">${esc(x.overall_score)}</div>
           <p>قیمت: ${esc(x.price)} | تغییر: ${esc(x.change_pct)}%
             | Smart Money: ${esc(x.smart_money?.phase)}</p>
@@ -556,6 +602,8 @@ def home():
             استراتژی‌های فعال ${esc((sd.selected_strategies||[]).length)}</p>
           <p>ATR: ${esc(q.atr)} | ورود: ${esc(p.entry)}
             | حد ضرر: ${esc(p.stop)} | هدف: ${esc(p.target)}</p>
+          <p>وضعیت ورود/خروج: ${esc(q.entry_exit?.status)} | ${esc(q.reason)}<br>
+            هدف دوم: ${esc(p.tp2)} | ابطال: ${esc(p.invalidation_condition)}</p>
           <div class="chart-wrap"><canvas id="price-${i}"></canvas></div>
           <div class="chart-wrap small"><canvas id="vol-${i}"></canvas></div>
           <div class="chart-wrap small"><canvas id="osc-${i}"></canvas></div>
@@ -725,4 +773,5 @@ def home():
         : 'ثبت نتیجه ناموفق: '+(data.detail||'خطا');
     }
   </script>
+  <script src="/financial-history.js"></script>
 </body></html>"""
