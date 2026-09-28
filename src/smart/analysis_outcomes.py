@@ -19,10 +19,11 @@ def _digest(value: Any) -> str:
 
 def replay_decision(summary: dict[str, Any]) -> dict[str, Any]:
     recorded = summary.get("decision") or {}
-    if recorded.get("version") != VERSION:
+    from .final_decision import SUPPORTED_VERSIONS
+    if recorded.get("version") not in SUPPORTED_VERSIONS:
         raise ValueError("Replay requires the recorded decision engine version")
-    replay = decide(summary, weights=recorded["weights"])
-    return {"analysis_id": summary["analysis_id"], "version": VERSION,
+    replay = decide(summary, weights=recorded["weights"], version=recorded["version"])
+    return {"analysis_id": summary["analysis_id"], "version": recorded["version"],
             "matches": replay == recorded, "recorded_sha256": _digest(recorded),
             "replayed_sha256": _digest(replay), "decision": replay}
 

@@ -41,6 +41,20 @@ def test_invalid_latest_future_or_stale_source_blocks_current_conclusion():
     assert "source_stale_or_unavailable" in stale["blockers"]
 
 
+def test_current_window_preserves_old_errors_without_promoting_recent_gaps():
+    rows = bars(350)
+    rows[5]["high"] = 0
+    gate = market_gate(rows, symbol="TEST", as_of=date(2026, 9, 27))
+    assert gate["status"] == gate["audit_status"] == "DEGRADED"
+    assert gate["current_window"]["status"] == "MEDIUM"
+    assert gate["invalid_ohlc_dates"] == [rows[5]["date"]]
+    assert gate["current_window"]["calendar_continuity"] == "UNVERIFIED"
+    rows[-10]["high"] = 0
+    gate = market_gate(rows, symbol="TEST", as_of=date(2026, 9, 27))
+    assert gate["current_window"]["status"] == "DEGRADED"
+    assert rows[-10]["date"] in gate["current_window"]["invalid_dates"]
+
+
 def test_incomplete_current_session_is_excluded_without_replacing_last_complete_bar():
     result = market_gate(bars(), symbol="TEST", as_of=date(2026, 9, 27),
                          completed_before=date(2026, 9, 27))

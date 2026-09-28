@@ -64,3 +64,14 @@ def test_missing_evidence_does_not_silently_redistribute_weights():
     assert result["weighted_evidence_score"] is None
     assert result["evidence_scores"]["market"] is None
     assert result["evidence_coverage_weight_pct"] == 90
+
+
+def test_current_quality_changes_are_versioned_and_other_entry_gates_still_apply():
+    summary = _bullish()
+    summary["quality_gate"].update(status="DEGRADED", current_window={"status": "MEDIUM"})
+    assert decide(summary)["gates"]["data_quality"] is True
+    assert decide(summary, version="DECISION-1.1")["gates"]["data_quality"] is False
+    summary["model_policy"]["approved"] = False
+    assert decide(summary)["state"] != "BUY"
+    summary["quality_gate"]["current_window"]["status"] = "DEGRADED"
+    assert decide(summary)["gates"]["data_quality"] is False

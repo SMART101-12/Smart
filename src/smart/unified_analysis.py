@@ -16,7 +16,7 @@ from urllib.parse import quote
 from .archive import safe_symbol, deduplicate_rows
 from zoneinfo import ZoneInfo
 
-VERSION = "SMART-ANALYSIS-2.1"
+VERSION = "SMART-ANALYSIS-2.2"
 ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 
 

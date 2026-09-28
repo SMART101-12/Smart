@@ -86,6 +86,24 @@ def market_gate(rows: list[dict[str, Any]], *, symbol: str, as_of: date | None =
     status = ("INVALID" if not valid or future or not latest_verified else
               "DEGRADED" if blockers or invalid or missing_volume or dedup["invalid_rows"]
               or dedup["duplicate_dates"] else "MEDIUM")
+    windows = {}
+    # Retain the full-history audit. Current eligibility is evaluated on the
+    # last source observations, before invalid bars are filtered out.
+    for size in (22, 60, 250, 300):
+        source_window = [r for r in canonical if r["source_date"] not in incomplete][-size:]
+        dates = {r["source_date"] for r in source_window}
+        bad_dates = sorted(dates.intersection(invalid + missing_volume + future))
+        duplicate_dates = sorted(dates.intersection(dedup["duplicate_date_values"]))
+        good = [r for r in valid if r["source_date"] in dates]
+        window_status = ("INVALID" if not latest_verified or future or not good else
+                         "DEGRADED" if blockers or bad_dates or duplicate_dates
+                         or dedup["invalid_rows"] else "MEDIUM")
+        windows[str(size)] = {"status": window_status, "requested_observations": size,
+                              "source_observations": len(source_window), "valid_observations": len(good),
+                              "from_date": source_window[0]["source_date"] if source_window else None,
+                              "to_date": source_last, "invalid_dates": bad_dates,
+                              "duplicate_dates": duplicate_dates,
+                              "calendar_continuity": "UNVERIFIED"}
     # Without an independently verified adjustment history we cannot assert HIGH.
     serial = json.dumps([r["source_row_hash"] for r in valid], sort_keys=True).encode("utf-8")
     return {"status": status, "as_of": as_of.isoformat(), "source": "TSETMC",
@@ -99,6 +117,8 @@ def market_gate(rows: list[dict[str, Any]], *, symbol: str, as_of: date | None =
             "latest_valid_date": latest, "latest_bar_verified": latest_verified,
             "age_calendar_days": age, "freshness": "FRESH" if fresh else "STALE",
             "corporate_action_adjustment": "UNVERIFIED", "blockers": blockers,
+            "audit_status": status, "windows": windows,
+            "current_window": windows["250"],
             "valid_rows_sha256": hashlib.sha256(serial).hexdigest(),
             "point_in_time": True}
 

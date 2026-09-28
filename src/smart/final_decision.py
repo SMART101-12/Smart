@@ -4,7 +4,8 @@ from __future__ import annotations
 from math import isfinite
 from typing import Any
 
-VERSION = "DECISION-1.1"
+VERSION = "DECISION-1.2"
+SUPPORTED_VERSIONS = {"DECISION-1.1", VERSION}
 WEIGHTS = {"market": 10, "industry": 10, "technical": 25,
            "fundamental": 15, "volume": 10, "money_flow": 15, "risk_reward": 15}
 
@@ -13,7 +14,10 @@ def _number(value: Any) -> float | None:
     return float(value) if type(value) in (int, float) and isfinite(value) else None
 
 
-def decide(summary: dict[str, Any], *, weights: dict[str, int] | None = None) -> dict[str, Any]:
+def decide(summary: dict[str, Any], *, weights: dict[str, int] | None = None,
+           version: str = VERSION) -> dict[str, Any]:
+    if version not in SUPPORTED_VERSIONS:
+        raise ValueError("Unsupported decision version")
     weights = WEIGHTS.copy() if weights is None else weights.copy()
     if set(weights) != set(WEIGHTS) or any(type(w) is not int or w < 0 for w in weights.values()) or sum(weights.values()) != 100:
         raise ValueError("Decision weights must sum to 100 and match all evidence categories")
@@ -24,6 +28,8 @@ def decide(summary: dict[str, Any], *, weights: dict[str, int] | None = None) ->
         (summary.get("backtest") or {}).get("audit") or {})
     gate = summary.get("quality_gate") or {}
     financial_gate = summary.get("fundamental_quality_gate") or {}
+    current_quality = ((gate.get("current_window") or {}).get("status", gate.get("status"))
+                       if version == VERSION else gate.get("status"))
     observed_flow = flow.get("observed_client_type") or {}
     volume_proxy = flow.get("price_volume_proxy") or {}
     directional = {"BULL": 80., "BEAR": 20., "RISK_OFF": 0., "SIDEWAYS": 50., "NEUTRAL": 50.}
@@ -42,7 +48,7 @@ def decide(summary: dict[str, Any], *, weights: dict[str, int] | None = None) ->
     complete = all(v is not None or weights[k] == 0 for k, v in evidence.items())
     score = round(sum(contributions.values()), 3) if complete else None
     mandatory = {
-        "data_quality": gate.get("status") in {"HIGH", "MEDIUM"} and
+        "data_quality": current_quality in {"HIGH", "MEDIUM"} and
                         gate.get("freshness") == "FRESH" and gate.get("latest_bar_verified") is True and not gate.get("blockers"),
         "adjustment_history": gate.get("corporate_action_adjustment") == "VERIFIED",
         "market_context": market.get("status") == "SUCCESS" and market.get("regime") not in {"UNKNOWN", "BEAR", "RISK_OFF"},
@@ -85,7 +91,7 @@ def decide(summary: dict[str, Any], *, weights: dict[str, int] | None = None) ->
         "historical_validation": 20 if mandatory["validation"] else 0,
         "fundamental_completeness": 15 if mandatory["financial_publication"] and mandatory["fundamental_completeness"] else 0,
         "setup_completeness": 15 if mandatory["setup_confirmation"] else 0}
-    return {"version": VERSION, "state": state, "as_of": gate.get("latest_valid_date"),
+    return {"version": version, "state": state, "as_of": gate.get("latest_valid_date"),
             "weights": weights, "evidence_scores": evidence,
             "observed_contributions": contributions, "weighted_evidence_score": score,
             "evidence_coverage_weight_pct": sum(weights[k] for k, v in evidence.items() if v is not None),
