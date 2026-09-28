@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-CONTRACT_VERSION = "SMART-LAYERS-1.0"
+CONTRACT_VERSION = "SMART-LAYERS-2.0"
 LAYER_NAMES = ("data_quality", "market", "industry", "technical", "fundamental",
                "flow", "setup", "backtest", "risk", "decision")
 STATUSES = frozenset({"SUCCESS", "PARTIAL", "FAILED", "UNAVAILABLE", "STALE", "INVALID"})
@@ -120,8 +120,11 @@ def from_legacy_summary(summary: dict[str, Any], stages: list[dict[str, Any]]) -
         "risk": layer(status="PARTIAL" if risk else "UNAVAILABLE", as_of=market_date,
                       evidence={"existing_assessment": risk} if risk else {},
                       data_quality="DEGRADED" if risk else "UNAVAILABLE"),
-        "decision": layer(status="UNAVAILABLE", as_of=None,
-                          errors=["Hard-gate final decision is not integrated"]),
+        "decision": layer(status="SUCCESS" if summary.get("decision") else "UNAVAILABLE",
+                          as_of=(summary.get("decision") or {}).get("as_of"),
+                          evidence=summary.get("decision") or {},
+                          errors=(summary.get("decision") or {}).get("failed_gates", []),
+                          data_quality="MEDIUM" if summary.get("decision") else "UNAVAILABLE"),
     }
     assert tuple(parts) == LAYER_NAMES
     return {"contract_version": CONTRACT_VERSION, "layers": parts}

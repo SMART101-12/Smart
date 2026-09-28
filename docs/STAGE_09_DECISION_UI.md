@@ -1,0 +1,7 @@
+# Stage 9: hard-gated decision and dashboard
+
+New reports use `SMART-ANALYSIS-2.0` and `SMART-LAYERS-2.0`. `decision` aggregates explicitly weighted market, industry, technical, fundamental, volume, actual individual flow and reward/risk evidence. A missing component keeps the total null; weights are never silently redistributed. Mandatory gates cover fresh source data, verified adjustment history, market/industry source verification, technical alignment, setup, frozen validation, observed flow, volume, financial publication, fundamental completeness, risk and evidence coverage. All must pass before BUY, followed by a score of at least 65. The six states are BUY/WATCH/WAIT/NO_SETUP/INVALIDATED/AVOID.
+
+`confidence_evidence` is a disclosed heuristic of evidence completeness and agreement, not a calibrated probability of profit. Legacy `confidence` remains null for forecast confidence. The default dashboard retains one main analysis button and adds eight expandable layer sections with dates, key metrics, missing evidence and sources, plus translated final decision and failed gates. Existing artifacts keep their original content and version.
+
+Current data has no authenticated Iranian market/industry history, independently verified adjustment series, measured liquidity/gap execution evidence or current verified fund NAV. These gates stay blocked. This is a partial evidence workflow, not a claim that external source gaps have been resolved.

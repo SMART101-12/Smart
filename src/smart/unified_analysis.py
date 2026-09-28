@@ -15,7 +15,7 @@ from urllib.parse import quote
 
 from .archive import safe_symbol
 
-VERSION = "SMART-ANALYSIS-1.3"
+VERSION = "SMART-ANALYSIS-2.0"
 ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 
 
@@ -109,6 +109,7 @@ async def run_job(job: dict[str, Any]) -> None:
     from .flow_analysis import analyze_flow
     from .setup_state import assess_setup
     from .backtest_audit import audit_backtest
+    from .final_decision import decide
     from .strategy_lab import bars_from_rows, walk_forward_exam
     from .symbol_learning import build_symbol_profile
     from .unified_evaluation import evaluate_profile
@@ -304,7 +305,6 @@ async def run_job(job: dict[str, Any]) -> None:
         missing.append("verified_broad_market_regime")
     if not regime or regime["industry"]["status"] != "SUCCESS":
         missing.append("verified_historical_industry_regime")
-    missing.append("git_publication")
     status = "COMPLETED" if not missing and quality.get("status") == "good" else "PARTIAL"
     evidence_missing = [item for item in missing if item != "git_publication"]
     model_rejected = self_test is not None and self_test.get("decision") != "PAPER_WATCH_CANDIDATE"
@@ -358,6 +358,9 @@ async def run_job(job: dict[str, Any]) -> None:
                        "raw": base_path + "/raw", "report": base_path + "/report",
                        "model_card": base_path + "/model-card"},
     }
+    summary["decision"] = decide(summary)
+    summary["confidence_evidence"] = summary["decision"]["confidence"]
+    summary["final_engine_output"]["assessment"] = summary["decision"]["state"]
     summary.update(from_legacy_summary(summary, job["stages"]))
     context = {"instruction": "Use only supplied validated data. Separate observed facts, calculated metrics and uncertainty. Never invent numbers.",
                "analysis_id": analysis_id, "symbol": canonical, "status": status,
@@ -376,6 +379,8 @@ async def run_job(job: dict[str, Any]) -> None:
                "technical_structure": structure,
                "flow": flow_analysis,
                "setup": setup_state,
+               "decision": summary["decision"],
+               "confidence_evidence": summary["confidence_evidence"],
                "layers": summary["layers"], "contract_version": summary["contract_version"],
                "risk": summary["risk"], "missing_data": missing, "warnings": job["warnings"]}
     raw = {"symbol_resolution": found, "market_analysis": row, "history": history,
