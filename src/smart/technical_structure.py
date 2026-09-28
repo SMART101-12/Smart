@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from statistics import mean
+from math import isfinite
 from typing import Any
 
 from .archive import deduplicate_rows
@@ -50,7 +51,7 @@ def analyze_technical_structure(history: list[dict[str, Any]], *, symbol: str,
     for row in canonical:
         day = date.fromisoformat(row["source_date"])
         values = [row.get(k) for k in ("open", "high", "low", "close", "volume")]
-        if (day <= as_of and all(type(v) in (int, float) and v > 0 for v in values)
+        if (day <= as_of and all(type(v) in (int, float) and isfinite(v) and v > 0 for v in values)
                 and row["low"] <= min(row["open"], row["close"])
                 <= max(row["open"], row["close"]) <= row["high"]):
             valid.append(row)
@@ -76,6 +77,20 @@ def analyze_technical_structure(history: list[dict[str, Any]], *, symbol: str,
                             "support": round(lower, 6), "resistance": round(upper, 6),
                             "pullback_to_support_pct": round(100 * (close / lower - 1), 3),
                             "last_close": close}
+        if len(rows) >= 11:
+            previous_window = rows[-11:-6]
+            high_up = upper > max(r["high"] for r in previous_window)
+            low_up = lower > min(r["low"] for r in previous_window)
+            timeframes[name]["higher_high_and_low"] = high_up and low_up
+            timeframes[name]["lower_high_and_low"] = (upper < max(r["high"] for r in previous_window)
+                                                      and lower < min(r["low"] for r in previous_window))
+        timeframes[name].update(
+            failed_breakout_up=latest["high"] > upper and close <= upper,
+            failed_breakout_down=latest["low"] < lower and close >= lower,
+            gap_from_previous_close_pct=round(100 * (latest["open"] / prior["close"] - 1), 3),
+            compression_ratio=round(mean(r["high"] - r["low"] for r in recent) /
+                                    mean(r["high"] - r["low"] for r in rows[-needed:-1]), 3)
+                                    if mean(r["high"] - r["low"] for r in rows[-needed:-1]) > 0 else None)
     daily = timeframes["daily"]
     score = None
     components = {}

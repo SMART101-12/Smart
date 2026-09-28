@@ -4,7 +4,7 @@ from __future__ import annotations
 from math import isfinite
 from typing import Any
 
-VERSION = "DECISION-1.0"
+VERSION = "DECISION-1.1"
 WEIGHTS = {"market": 10, "industry": 10, "technical": 25,
            "fundamental": 15, "volume": 10, "money_flow": 15, "risk_reward": 15}
 
@@ -53,6 +53,7 @@ def decide(summary: dict[str, Any], *, weights: dict[str, int] | None = None) ->
         "setup_confirmation": setup.get("state") == "CONFIRMED" and bool(setup.get("confirmed_plan")),
         "validation": audit.get("validation_passed") is True and audit.get("frozen_test_passed") is True
                       and (summary.get("self_test") or {}).get("decision") == "PAPER_WATCH_CANDIDATE",
+        "approved_model_version": (summary.get("model_policy") or {}).get("approved") is True,
         "individual_flow": observed_flow.get("status") == "SUCCESS" and observed_flow.get("signal") == "BULLISH"
                            and not flow.get("conflicts"),
         "volume_confirmation": _number(volume_proxy.get("volume_ratio_20")) is not None

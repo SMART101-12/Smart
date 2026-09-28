@@ -6,7 +6,7 @@ from smart.final_decision import decide
 
 
 def _bullish():
-    return {"instrument_type": "EQUITY", "quality_gate": {
+    return {"instrument_type": "EQUITY", "model_policy": {"approved": True}, "quality_gate": {
         "status": "MEDIUM", "freshness": "FRESH", "latest_bar_verified": True,
         "latest_valid_date": "2026-09-28", "corporate_action_adjustment": "VERIFIED", "blockers": []},
         "market": {"status": "SUCCESS", "regime": "BULL", "source_validation": "VERIFIED"},

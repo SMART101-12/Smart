@@ -17,6 +17,14 @@ from smart.technical_analysis import Bar
 from smart import symbol_learning
 
 
+@pytest.fixture(autouse=True)
+def offline_index_context(monkeypatch):
+    from smart import index_context_source
+    async def empty_context(**kwargs):
+        return {}
+    monkeypatch.setattr(index_context_source, "fetch_index_context", empty_context)
+
+
 def test_windows_job_polling_lock_retries_atomic_write(monkeypatch, tmp_path):
     target = tmp_path / "job.json"
     target.write_text("{}", encoding="utf-8")
@@ -68,7 +76,13 @@ def test_unified_partial_job_and_integrity(monkeypatch, tmp_path):
     assert client.get(f"/api/analyze/{job['analysis_id']}").json()["status"] == "PARTIAL"
     assert client.get(f"/api/analysis/TEST/{job['analysis_id']}/chatgpt").status_code == 200
     assert client.get(f"/api/analysis/TEST/{job['analysis_id']}/model-card").status_code == 200
+    replay = client.get(f"/api/analysis/TEST/{job['analysis_id']}/replay").json()
+    assert replay["matches"] is True
+    assert client.get(f"/api/analysis/TEST/{job['analysis_id']}/outcomes").json()["outcomes"] == []
     path = tmp_path / "TEST" / job["analysis_id"] / "analysis.json"
+    original = path.read_bytes()
+    asyncio.run(ua.run_job(job))
+    assert path.read_bytes() == original
     path.write_text(json.dumps({"status": "COMPLETED"}), encoding="utf-8")
     with pytest.raises(ValueError, match="integrity"):
         ua.get_artifact("TEST", job["analysis_id"], "analysis.json")
@@ -80,6 +94,7 @@ def test_unified_routes_and_simple_dashboard(monkeypatch, tmp_path):
     homepage = client.get("/").text
     assert homepage.count('<button id="analyze">') == 1
     assert 'id="market-models"' in homepage
+    assert 'id="analysis-layers"' in homepage
     assert client.get("/legacy").status_code == 200
     assert client.post("/api/analyze", json={"symbol": "../bad"}).status_code == 422
     assert client.get("/api/analyze/invalid").status_code == 404

@@ -34,3 +34,6 @@ def test_missing_current_bar_or_invalidation_never_confirms():
     kwargs["gate"] = {"blockers": [], "freshness": "FRESH"}
     kwargs["last_close"] = 98
     assert assess_setup(levels, **kwargs)["state"] == "INVALIDATED"
+    levels["status"] = "no_setup"
+    levels["conditional"] = levels.pop("plan")
+    assert assess_setup(levels, **kwargs)["state"] != "INVALIDATED"

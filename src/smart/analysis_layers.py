@@ -138,4 +138,4 @@ def _regime_layer(value: dict[str, Any] | None, fallback: str) -> dict[str, Any]
                  errors=value.get("errors") or ([] if success else [fallback]),
                  data_quality="MEDIUM" if success else "UNAVAILABLE",
                  provenance={"declared_source": value["source"],
-                             "independently_authenticated": False} if value.get("source") else {})
+                             "official_origin_verified": value.get("source_validation") == "VERIFIED"} if value.get("source") else {})

@@ -117,6 +117,55 @@ def unified_dashboard():
     return HTML
 
 
+@app.get("/api/analysis/{symbol}/{analysis_id}/replay")
+def unified_analysis_replay(symbol: str, analysis_id: str):
+    from .analysis_outcomes import replay_decision
+    summary = _read_unified_artifact(symbol, analysis_id, "analysis.json")
+    try:
+        return replay_decision(summary)
+    except ValueError as exc:
+        raise HTTPException(409, detail=str(exc)) from exc
+
+
+@app.get("/api/analysis/{symbol}/{analysis_id}/outcomes")
+def unified_analysis_outcomes(symbol: str, analysis_id: str):
+    from .unified_analysis import _directory
+    _read_unified_artifact(symbol, analysis_id, "analysis.json")
+    root = _directory(symbol, analysis_id) / "outcomes"
+    return {"analysis_id": analysis_id, "outcomes": [json.loads(p.read_text(encoding="utf-8"))
+            for p in sorted(root.glob("*.json"))], "used_for_original_decision": False}
+
+
+@app.post("/api/analysis/{symbol}/{analysis_id}/outcomes/refresh")
+async def unified_analysis_outcomes_refresh(symbol: str, analysis_id: str):
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+    from . import tsetmc
+    from .analysis_outcomes import record_forward_outcomes
+    from .unified_analysis import _directory
+    summary = _read_unified_artifact(symbol, analysis_id, "analysis.json")
+    try:
+        history = await tsetmc.daily_history(summary["tsetmc_id"])
+        outcomes = record_forward_outcomes(summary, history,
+                    _directory(symbol, analysis_id) / "outcomes",
+                    as_of=datetime.now(ZoneInfo("Asia/Tehran")).date() - timedelta(days=1))
+        return {"analysis_id": analysis_id, "outcomes": outcomes,
+                "used_for_original_decision": False}
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(409, detail=str(exc)) from exc
+
+
+@app.get("/api/analysis-learning/{symbol}/candidate")
+def unified_learning_candidate(symbol: str):
+    from .analysis_outcomes import learning_candidate
+    from .archive import safe_symbol
+    from .unified_analysis import _root
+    rows = []
+    for path in sorted((_root() / safe_symbol(symbol)).glob("*/outcomes/*.json")):
+        rows.append(json.loads(path.read_text(encoding="utf-8")))
+    return learning_candidate(rows)
+
+
 @app.get("/api/financial-history")
 def financial_history(symbol: str = Query(min_length=1, max_length=80),
                       sync: bool = True, basis: str = "standalone"):

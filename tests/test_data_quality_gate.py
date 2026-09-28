@@ -41,6 +41,15 @@ def test_invalid_latest_future_or_stale_source_blocks_current_conclusion():
     assert "source_stale_or_unavailable" in stale["blockers"]
 
 
+def test_incomplete_current_session_is_excluded_without_replacing_last_complete_bar():
+    result = market_gate(bars(), symbol="TEST", as_of=date(2026, 9, 27),
+                         completed_before=date(2026, 9, 27))
+    assert result["incomplete_session_dates"] == ["2026-09-27"]
+    assert result["latest_raw_source_date"] == "2026-09-27"
+    assert result["latest_valid_date"] == "2026-09-26"
+    assert result["latest_bar_verified"] is True
+
+
 def test_provenance_distinguishes_observed_and_calculated_values():
     raw = observed(100, unit="IRR", source="TSETMC", source_date="2026-09-27")
     metric = calculated(10, unit="percent", formula="net_assets/price", inputs=[raw])

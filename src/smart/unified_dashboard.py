@@ -18,7 +18,7 @@ a{color:#17659a}li{padding:3px}table{width:100%;border-collapse:collapse}th,td{t
 const status=document.getElementById('status'),stages=document.getElementById('stages'),result=document.getElementById('result'),modelBox=document.getElementById('market-models');
 const signalNames={bullish:'صعودی',bearish:'نزولی',neutral:'خنثی',unavailable:'داده ناکافی'};
 const decisionNames={BUY:'خرید مشروط به گیت‌های تأییدشده',WATCH:'زیر نظر',WAIT:'انتظار',NO_SETUP:'الگوی ورود معتبر موجود نیست',INVALIDATED:'الگو باطل شده',AVOID:'پرهیز'};
-const gateNames={data_quality:'کیفیت داده',adjustment_history:'سابقه تعدیل قیمت',market_context:'وضعیت بازار',industry_context:'وضعیت صنعت',context_source_verification:'تأیید منبع شاخص‌ها',technical_alignment:'هم‌جهتی تکنیکال',setup_confirmation:'تأیید الگوی ورود',validation:'اعتبارسنجی مدل',individual_flow:'ورود پول حقیقی',volume_confirmation:'تأیید حجم',financial_publication:'انتشار معتبر کدال',fundamental_completeness:'کفایت بنیادی',risk_constraints:'ریسک و نقدشوندگی',complete_evidence:'کامل بودن شواهد'};
+const gateNames={data_quality:'کیفیت داده',adjustment_history:'سابقه تعدیل قیمت',market_context:'وضعیت بازار',industry_context:'وضعیت صنعت',context_source_verification:'تأیید منبع شاخص‌ها',technical_alignment:'هم‌جهتی تکنیکال',setup_confirmation:'تأیید الگوی ورود',validation:'اعتبارسنجی مدل',approved_model_version:'نسخه تأییدشده مدل',individual_flow:'ورود پول حقیقی',volume_confirmation:'تأیید حجم',financial_publication:'انتشار معتبر کدال',fundamental_completeness:'کفایت بنیادی',risk_constraints:'ریسک و نقدشوندگی',complete_evidence:'کامل بودن شواهد'};
 function renderLayers(data){const box=document.getElementById('analysis-layers');box.replaceChildren();
 const labels={market:'بازار',industry:'صنعت',technical:'تکنیکال چندبازه‌ای',fundamental:'بنیادی و کدال',flow:'حجم و جریان پول',setup:'الگوی ورود و سطوح شرطی',backtest:'بک‌تست و اعتبارسنجی',risk:'ریسک'};
 for(const [key,label] of Object.entries(labels)){const layer=data.layers?.[key]||{},panel=document.createElement('details'),title=document.createElement('summary');title.textContent=label+' — '+(layer.status||'ناموجود')+' | '+(layer.as_of||'تاریخ ناموجود');panel.append(title);
@@ -40,6 +40,7 @@ const notice=document.createElement('p');notice.textContent=report.interpretatio
 function show(job){status.textContent=job.status+' — '+job.stage+(job.warnings?.length?' — هشدار: '+job.warnings.map(x=>x.stage+': '+x.error).join('؛ '):'');
 stages.replaceChildren(...(job.stages||[]).map(x=>{const li=document.createElement('li');li.textContent=x.name+' — '+x.status+' ('+x.seconds+'s)';return li}));}
 document.getElementById('analyze').onclick=async()=>{const symbol=document.getElementById('symbol').value.trim();if(!symbol)return;
+const button=document.getElementById('analyze');if(button.disabled)return;button.disabled=true;
 status.textContent='در حال شروع...';result.replaceChildren();document.getElementById('analysis-layers').replaceChildren();modelBox.textContent='در حال محاسبهٔ روش‌ها...';try{let r=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol})});
 let job=await r.json();if(!r.ok)throw Error(JSON.stringify(job.detail));show(job);
 for(let i=0;i<300;i++){await new Promise(resolve=>setTimeout(resolve,1000));r=await fetch('/api/analyze/'+encodeURIComponent(job.analysis_id));job=await r.json();show(job);
@@ -51,5 +52,5 @@ const setup=data.entry_exit||{};const note=document.createElement('p');note.text
 if(setup.conditional){const c=setup.conditional,zone=c.entry_zone_if_confirmed||c.entry_zone||[];const levels=document.createElement('pre');levels.textContent=['سناریوی شرطی، نه دستور معامله:','ورود: '+zone.join(' تا '),'حد ضرر: '+(c.stop_if_entered??c.sl??'-'),'هدف اول: '+(c.target_1_if_entered??c.tp1??'-'),'هدف دوم: '+(c.target_2_if_entered??c.tp2??'-'),'شرط/ابطال: '+(c.confirmation??c.invalidation_condition??'-')+' / '+(c.invalidation??'-')].join(String.fromCharCode(10));result.append(levels)}
 const p=document.createElement('details');const title=document.createElement('summary');title.textContent='جزئیات کامل و منابع';const raw=document.createElement('pre');raw.textContent=JSON.stringify(data,null,2);p.append(title,raw);result.append(p);
 const link=document.createElement('a');link.href='/api/analysis/'+encodeURIComponent(symbol)+'/'+encodeURIComponent(job.analysis_id)+'/chatgpt';link.textContent='بستهٔ زمینه برای ChatGPT';result.prepend(link)}
-}catch(e){status.textContent='خطا: '+e.message}};
+}catch(e){status.textContent='خطا: '+e.message}finally{button.disabled=false}};
 </script></body></html>'''

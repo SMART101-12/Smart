@@ -35,7 +35,7 @@ def assess_setup(levels: dict[str, Any] | None, *, gate: dict[str, Any] | None,
     reward2 = round((target2 - entry) / (entry - stop), 3) if risk_pct and target2 else None
     atr_pct = round(atr / entry * 100, 3) if atr and entry else None
     risk = "EXTREME" if risk_pct is None else "HIGH" if risk_pct > 8 or (atr_pct and atr_pct > 8) else "MEDIUM" if risk_pct > 4 else "LOW"
-    if last_close is not None and stop and last_close <= stop:
+    if levels.get("plan") and last_close is not None and stop and last_close <= stop:
         state = "INVALIDATED"
         blocks.append("last_close_below_stop")
     else:

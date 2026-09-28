@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import date
 from statistics import mean
+from math import isfinite
 from typing import Any
 
 from .archive import deduplicate_rows, parse_market_date
@@ -13,7 +14,8 @@ def analyze_flow(history: list[dict[str, Any]], *, symbol: str, as_of: date,
     rows, _ = deduplicate_rows(history, symbol=symbol)
     rows = [r for r in rows if parse_market_date(r["source_date"]) <= as_of
             and type(r.get("volume")) in (int, float) and r["volume"] >= 0
-            and type(r.get("close")) in (int, float) and r["close"] > 0]
+            and isfinite(r["volume"])
+            and type(r.get("close")) in (int, float) and isfinite(r["close"]) and r["close"] > 0]
     proxy = {"status": "UNAVAILABLE", "signal": "UNAVAILABLE", "as_of": None}
     if len(rows) >= 21:
         baseline = mean(r["volume"] for r in rows[-21:-1])
@@ -39,10 +41,10 @@ def analyze_flow(history: list[dict[str, Any]], *, symbol: str, as_of: date,
     if (observation.get("source") == "TSETMC ClientType" and day is not None and day <= as_of
             and 0 <= (as_of - day).days <= 5
             and type(buy) in (int, float) and type(sell) in (int, float)
-            and buy >= 0 and sell >= 0 and buy + sell > 0):
+            and isfinite(buy) and isfinite(sell) and buy >= 0 and sell >= 0 and buy + sell > 0):
         net = buy - sell
         power = ((buy / count_buy) / (sell / count_sell)
-                 if all(type(v) in (int, float) and v > 0 for v in (buy, sell, count_buy, count_sell)) else None)
+                 if all(type(v) in (int, float) and isfinite(v) and v > 0 for v in (buy, sell, count_buy, count_sell)) else None)
         observed = {"status": "SUCCESS", "signal": "BULLISH" if net > 0 else "BEARISH" if net < 0 else "NEUTRAL",
                     "as_of": day.isoformat(), "net_individual_volume": net,
                     "individual_buy_power": round(power, 3) if power is not None else None,

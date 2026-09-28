@@ -35,7 +35,7 @@ def calculated(value: float | int | None, *, unit: str, formula: str,
 
 
 def market_gate(rows: list[dict[str, Any]], *, symbol: str, as_of: date | None = None,
-                max_age_days: int = 5) -> dict[str, Any]:
+                max_age_days: int = 5, completed_before: date | None = None) -> dict[str, Any]:
     """Audit raw observations; exclude invalid rows only in downstream engines.
 
     A missing latest candle or a date after as_of blocks current conclusions.
@@ -45,11 +45,14 @@ def market_gate(rows: list[dict[str, Any]], *, symbol: str, as_of: date | None =
     if max_age_days < 0:
         raise ValueError("max_age_days must be nonnegative")
     canonical, dedup = deduplicate_rows(rows, symbol=symbol)
-    valid, invalid, missing_volume, future = [], [], [], []
+    valid, invalid, missing_volume, future, incomplete = [], [], [], [], []
     for item in canonical:
         day = date.fromisoformat(item["source_date"])
         if day > as_of:
             future.append(item["source_date"])
+            continue
+        if completed_before is not None and day >= completed_before:
+            incomplete.append(item["source_date"])
             continue
         values = [item.get(key) for key in ("open", "high", "low", "close")]
         if any(v is None or not isinstance(v, (int, float)) or not isfinite(v)
@@ -65,7 +68,8 @@ def market_gate(rows: list[dict[str, Any]], *, symbol: str, as_of: date | None =
             missing_volume.append(item["source_date"])
             continue
         valid.append(item)
-    source_last = canonical[-1]["source_date"] if canonical else None
+    completed_source = [r for r in canonical if r["source_date"] not in incomplete]
+    source_last = completed_source[-1]["source_date"] if completed_source else None
     latest = valid[-1]["source_date"] if valid else None
     age = (as_of - date.fromisoformat(latest)).days if latest else None
     fresh = age is not None and 0 <= age <= max_age_days
@@ -90,6 +94,8 @@ def market_gate(rows: list[dict[str, Any]], *, symbol: str, as_of: date | None =
             "duplicate_dates": dedup["duplicate_date_values"],
             "invalid_ohlc_dates": invalid, "missing_volume_dates": missing_volume,
             "future_dates": future, "latest_source_date": source_last,
+            "incomplete_session_dates": incomplete,
+            "latest_raw_source_date": canonical[-1]["source_date"] if canonical else None,
             "latest_valid_date": latest, "latest_bar_verified": latest_verified,
             "age_calendar_days": age, "freshness": "FRESH" if fresh else "STALE",
             "corporate_action_adjustment": "UNVERIFIED", "blockers": blockers,
@@ -119,11 +125,7 @@ def publication_date(value: str | None) -> date | None:
 
 def financial_gate(reports: list[dict[str, Any]], sync: dict[str, Any] | None,
                    *, instrument_type: str, as_of: date | None = None) -> dict[str, Any]:
-    """Describe available Codal evidence before scoring; never assume NAV.
-
-    Persian-calendar publication timestamps need an independently verified
-    converter before a historical as-of replay can use those documents.
-    """
+    """Describe available Codal evidence with a validated publication cutoff."""
     as_of = as_of or date.today()
     sync = sync or {}
     annual = [r for r in reports if r.get("report_type") == "annual"]
@@ -146,8 +148,10 @@ def financial_gate(reports: list[dict[str, Any]], sync: dict[str, Any] | None,
     blockers = []
     if future:
         blockers.append("future_publication")
-    if len(periods) < 5:
+    if instrument_type == "EQUITY" and len(periods) < 5:
         blockers.append("fewer_than_five_annual_periods")
+    if instrument_type == "FUND" and not annual:
+        blockers.append("fund_report_unavailable")
     if source_status != "SUCCESS":
         blockers.append("codal_source_partial")
     if unverified_publication:

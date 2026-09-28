@@ -13,9 +13,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from .archive import safe_symbol
+from .archive import safe_symbol, deduplicate_rows
+from zoneinfo import ZoneInfo
 
-VERSION = "SMART-ANALYSIS-2.0"
+VERSION = "SMART-ANALYSIS-2.1"
 ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 
 
@@ -99,17 +100,19 @@ async def run_job(job: dict[str, Any]) -> None:
     from . import tsetmc
     from .financial_history import HistoricalDataRepository
     from .financial_scoring import FinancialScoringEngine
-    from .fund_financial import fund_financial_evidence, is_fund_instrument
+    from .fund_financial import fund_financial_evidence, fund_valuation, is_fund_instrument
     from .conditional_levels import conditional_levels
     from .analysis_layers import from_legacy_summary
     from .data_quality_gate import financial_gate, market_gate
     from .market_models import analyze_market_models
     from .market_regime import analyze_market_regime, analyze_industry_regime, load_regime_snapshot
+    from .index_context_source import fetch_index_context
     from .technical_structure import analyze_technical_structure
     from .flow_analysis import analyze_flow
     from .setup_state import assess_setup
     from .backtest_audit import audit_backtest
     from .final_decision import decide
+    from .analysis_settings import load_analysis_configuration
     from .strategy_lab import bars_from_rows, walk_forward_exam
     from .symbol_learning import build_symbol_profile
     from .unified_evaluation import evaluate_profile
@@ -117,6 +120,10 @@ async def run_job(job: dict[str, Any]) -> None:
 
     symbol, analysis_id = job["symbol"], job["analysis_id"]
     directory = _directory(symbol, analysis_id)
+    if (directory / "manifest.json").exists():
+        # A completed analysis is an immutable snapshot. Refresh creates a
+        # new analysis_id; subsequent outcomes live in a separate subfolder.
+        return
     job["status"] = "RUNNING"
     _write(directory / "job.json", job)
     started = time.monotonic()
@@ -128,7 +135,7 @@ async def run_job(job: dict[str, Any]) -> None:
         try:
             value = await action()
             reported = value.get("status") if isinstance(value, dict) else None
-            state = "PARTIAL" if reported in {"PARTIAL", "SOURCE_UNAVAILABLE", "INSUFFICIENT_HISTORY", "INSUFFICIENT_DATA", "DEGRADED", "INVALID"} else "COMPLETED"
+            state = "PARTIAL" if reported in {"PARTIAL", "SOURCE_UNAVAILABLE", "INSUFFICIENT_HISTORY", "INSUFFICIENT_DATA", "DEGRADED", "INVALID", "UNAVAILABLE", "NOT_AVAILABLE", "CONFLICTING", "unavailable"} else "COMPLETED"
         except Exception as exc:
             value = None
             state = "NOT_AVAILABLE"
@@ -146,6 +153,11 @@ async def run_job(job: dict[str, Any]) -> None:
         _write(directory / "job.json", job)
         return value
 
+    configuration = await stage("configuration", lambda: asyncio.to_thread(load_analysis_configuration))
+    if not configuration:
+        job.update(status="FAILED", stage="finished", finished_at=_now())
+        _write(directory / "job.json", job)
+        return
     found = await stage("symbol", lambda: tsetmc.search_symbol(symbol))
     if not found or not found.get("insCode"):
         job.update(status="SYMBOL_NOT_FOUND", stage="finished", finished_at=_now())
@@ -159,12 +171,43 @@ async def run_job(job: dict[str, Any]) -> None:
 
     history = await stage("historical_data", fetch_history)
     quality_gate = await stage("data_quality_gate", lambda: asyncio.to_thread(
-        market_gate, history or [], symbol=symbol))
+        market_gate, history or [], symbol=symbol,
+        as_of=datetime.now(ZoneInfo("Asia/Tehran")).date(),
+        completed_before=datetime.now(ZoneInfo("Asia/Tehran")).date()))
+    canonical_history, _ = deduplicate_rows(history or [], symbol=symbol)
+    excluded_dates = set((quality_gate or {}).get("invalid_ohlc_dates", []) +
+                         (quality_gate or {}).get("missing_volume_dates", []) +
+                         (quality_gate or {}).get("future_dates", []) +
+                         (quality_gate or {}).get("incomplete_session_dates", []))
+    analysis_history = [r for r in canonical_history if r["source_date"] not in excluded_dates]
+    async def outcome_review():
+        from .analysis_outcomes import record_forward_outcomes
+        root = _root() / safe_symbol(symbol)
+        prior = sorted(root.glob("*/manifest.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:20]
+        recorded = 0
+        for manifest_path in prior:
+            previous = get_artifact(symbol, manifest_path.parent.name, "analysis.json")
+            recorded += len(record_forward_outcomes(previous, analysis_history,
+                            manifest_path.parent / "outcomes",
+                            as_of=date.fromisoformat(quality_gate["as_of"])))
+        return {"status": "COMPLETED", "observed_horizons": recorded,
+                "outcomes_used_for_current_decision": False}
+
+    await stage("outcome_review", outcome_review)
     async def regimes():
         snapshot = await asyncio.to_thread(load_regime_snapshot)
         cutoff = date.fromisoformat(quality_gate["as_of"])
-        return {"market": analyze_market_regime(snapshot, as_of=cutoff),
-                "industry": analyze_industry_regime(snapshot, symbol=canonical, as_of=cutoff)}
+        if not snapshot:
+            snapshot = await fetch_index_context(symbol=canonical, ins_code=ins_code,
+                is_fund=is_fund, as_of=cutoff, last_completed_date=quality_gate.get("latest_valid_date"))
+        snapshot["stock_series"] = [{"date": r["source_date"], "close": r["close"]}
+                                    for r in analysis_history]
+        market = analyze_market_regime(snapshot, as_of=cutoff)
+        industry = analyze_industry_regime(snapshot, symbol=canonical, as_of=cutoff)
+        market["errors"].extend(e for e in snapshot.get("source_errors", []) if not e.startswith("industry:"))
+        industry["errors"].extend(e for e in snapshot.get("source_errors", []) if e.startswith("industry:"))
+        return {"status": "SUCCESS" if market["status"] == industry["status"] == "SUCCESS" else "PARTIAL",
+                "market": market, "industry": industry, "source_errors": snapshot.get("source_errors", [])}
 
     regime = await stage("market_industry_regime", regimes)
     critical_market = bool(quality_gate and any(issue in quality_gate["blockers"]
@@ -176,7 +219,7 @@ async def run_job(job: dict[str, Any]) -> None:
     if row is None and history and not critical_market:
         async def cached_technical():
             from .analysis_contract import build_structured_analysis
-            technical_history = tsetmc._technical_history(history)
+            technical_history = tsetmc._technical_history(analysis_history)
             snapshot = {"symbol": symbol, "source": "TSETMC cached daily history",
                         "technical_history": technical_history,
                         "analysis": {"technical_history": technical_history}}
@@ -204,38 +247,45 @@ async def run_job(job: dict[str, Any]) -> None:
     async def verify_financial_source():
         repository = HistoricalDataRepository()
         return await asyncio.to_thread(financial_gate, repository.reports(symbol), sync,
-                                       instrument_type="FUND" if is_fund else "EQUITY")
+                                       instrument_type="FUND" if is_fund else "EQUITY",
+                                       as_of=date.fromisoformat(quality_gate["as_of"]))
 
     fundamental_quality = await stage("fundamental_quality_gate", verify_financial_source)
     fundamental = None if fundamental_quality and fundamental_quality["status"] == "INVALID" else await stage(
         "fundamental", financial)
+    if is_fund and fundamental:
+        last_bar = analysis_history[-1] if analysis_history else {}
+        valuation = fund_valuation(fundamental.get("net_asset_value_per_unit"),
+                    price=last_bar.get("close"), price_date=last_bar.get("source_date"),
+                    as_of=date.fromisoformat(quality_gate["as_of"]))
+        fundamental.update(valuation=valuation, valuation_score=valuation["valuation_score"])
     if fundamental and fundamental.get("source_error"):
         job["warnings"].append({"stage": "fundamental", "error": fundamental["source_error"]})
         _write(directory / "job.json", job)
 
     async def exam():
-        if not history:
+        if not analysis_history:
             raise ValueError("no historical bars")
         # Bound research to recent observations while retaining the terminal
         # holdout. Capping decisions would instead examine only the oldest days.
-        recent = [asdict(bar) for bar in bars_from_rows(history)[-300:]]
+        recent = [asdict(bar) for bar in bars_from_rows(analysis_history)[-300:]]
         return await asyncio.to_thread(walk_forward_exam, recent, symbol=symbol)
 
     backtest = await stage("historical_exam", exam)
 
     async def long_only():
-        if not history:
+        if not analysis_history:
             raise ValueError("no historical bars")
-        return await asyncio.to_thread(build_symbol_profile, history, symbol=symbol,
+        return await asyncio.to_thread(build_symbol_profile, analysis_history, symbol=symbol,
                                        transaction_cost_pct=0.35, persist=False,
                                        source_metadata={"source": "TSETMC", "ins_code": ins_code})
 
     profile = await stage("long_only_oos", long_only)
 
     async def self_evaluation():
-        if not profile or not history:
+        if not profile or not analysis_history:
             raise ValueError("long-only profile unavailable")
-        return await asyncio.to_thread(evaluate_profile, profile, history)
+        return await asyncio.to_thread(evaluate_profile, profile, analysis_history)
 
     evaluation = await stage("model_self_test", self_evaluation)
     backtest_audit = await stage("backtest_audit", lambda: asyncio.to_thread(
@@ -251,22 +301,20 @@ async def run_job(job: dict[str, Any]) -> None:
                     "plan": None, "conditional": None}
         if not history:
             raise ValueError("no historical bars")
-        recent = [asdict(bar) for bar in bars_from_rows(history)[-60:]]
+        recent = [asdict(bar) for bar in bars_from_rows(analysis_history)[-60:]]
         return await asyncio.to_thread(conditional_levels, recent, symbol,
                                        model_decision=(self_test or {}).get("decision"))
 
     levels = await stage("entry_exit", entry_exit)
     async def ten_models():
-        cached = ((row or {}).get("analysis") or {}).get("market_models")
-        return cached if cached else await asyncio.to_thread(
-            analyze_market_models, history or [], symbol=symbol)
+        return await asyncio.to_thread(analyze_market_models, analysis_history, symbol=symbol)
 
     models = await stage("ten_market_models", ten_models)
     structure = await stage("technical_structure", lambda: asyncio.to_thread(
-        analyze_technical_structure, history or [], symbol=symbol,
-        as_of=date.fromisoformat(quality_gate["as_of"])))
+        analyze_technical_structure, analysis_history, symbol=symbol,
+        as_of=date.fromisoformat(quality_gate["as_of"]), weights=configuration["technical_weights"]))
     flow_analysis = await stage("money_flow", lambda: asyncio.to_thread(
-        analyze_flow, history or [], symbol=symbol,
+        analyze_flow, analysis_history, symbol=symbol,
         as_of=date.fromisoformat(quality_gate["as_of"]),
         client_type=(row or {}).get("client_type_observation")))
     setup_state = await stage("setup_state", lambda: asyncio.to_thread(
@@ -313,13 +361,16 @@ async def run_job(job: dict[str, Any]) -> None:
         "status": status, "symbol": canonical, "requested_symbol": symbol,
         "instrument_type": "FUND" if is_fund else "EQUITY",
         "tsetmc_id": ins_code, "analysis_id": analysis_id, "engine_version": VERSION,
-        "as_of": structured.get("as_of"), "data_quality": quality,
+        "configuration": configuration,
+        "as_of": (quality_gate or {}).get("latest_valid_date"), "data_quality": quality,
         "quality_gate": quality_gate,
         "market": (regime or {}).get("market"),
         "industry": (regime or {}).get("industry"),
+        "regime_source_errors": (regime or {}).get("source_errors", []),
         "fundamental_quality_gate": fundamental_quality,
-        "technical": {key: value for key, value in structured.items()
-                      if key not in {"final_assessment", "scenarios"}} if row else None,
+        "technical": structure,
+        "legacy_technical": {key: value for key, value in structured.items()
+                             if key not in {"final_assessment", "scenarios"}} if row else None,
         "smart_money": (row or {}).get("smart_money"),
         "fundamental": fundamental,
         "backtest": {"directional_exam": backtest, "long_only": model_backtest,
@@ -331,10 +382,17 @@ async def run_job(job: dict[str, Any]) -> None:
         "flow": flow_analysis,
         "setup": setup_state,
         "self_test": self_test,
-        "risk": structured.get("risk"),
+        "risk": {"level": (setup_state or {}).get("risk"),
+                 "stop_distance_pct": (setup_state or {}).get("risk_pct"),
+                 "reward_risk_1": (setup_state or {}).get("reward_risk_1"),
+                 "liquidity": (setup_state or {}).get("liquidity"),
+                 "gap_execution_risk": (setup_state or {}).get("gap_execution_risk")},
+        "legacy_risk": structured.get("risk"),
         # The legacy contract's quality-only number is not a calibrated
         # probability of future success. No forecast confidence is inferred.
         "confidence": None,
+        "model_policy": {"approved": False, "state": "RESEARCH_CANDIDATE",
+                         "automatic_promotion": False},
         "confidence_status": "INSUFFICIENT_DATA" if evidence_missing else "MODEL_REJECTED" if model_rejected else "NOT_CALIBRATED",
         "final_engine_output": {
             "trend": structured.get("trend") if row else None,
@@ -358,7 +416,7 @@ async def run_job(job: dict[str, Any]) -> None:
                        "raw": base_path + "/raw", "report": base_path + "/report",
                        "model_card": base_path + "/model-card"},
     }
-    summary["decision"] = decide(summary)
+    summary["decision"] = decide(summary, weights=configuration["decision_weights"])
     summary["confidence_evidence"] = summary["decision"]["confidence"]
     summary["final_engine_output"]["assessment"] = summary["decision"]["state"]
     summary.update(from_legacy_summary(summary, job["stages"]))
@@ -384,7 +442,7 @@ async def run_job(job: dict[str, Any]) -> None:
                "layers": summary["layers"], "contract_version": summary["contract_version"],
                "risk": summary["risk"], "missing_data": missing, "warnings": job["warnings"]}
     raw = {"symbol_resolution": found, "market_analysis": row, "history": history,
-           "symbol_profile": profile}
+           "symbol_profile": profile, "regime_source_errors": (regime or {}).get("source_errors", [])}
     model_card = {"engine_version": (profile or {}).get("engine_version"),
                   "selected_model": (profile or {}).get("selected_model"),
                   "coverage": (profile or {}).get("coverage"),
@@ -392,6 +450,12 @@ async def run_job(job: dict[str, Any]) -> None:
                   "validation": (model_backtest or {}).get("metrics", {}).get("validation"),
                   "frozen_oos": (model_backtest or {}).get("metrics", {}).get("test"),
                   "self_test": self_test, "data_quality": quality,
+                  "decision_version": summary["decision"]["version"],
+                  "decision_weights": summary["decision"]["weights"],
+                  "technical_version": (structure or {}).get("version"),
+                  "technical_weights": (structure or {}).get("weights"),
+                  "model_policy": summary["model_policy"],
+                  "configuration": configuration,
                   "limitations": missing}
     report = {"title": "SMART stock analysis", "summary": summary,
               "limitations": missing, "stages": job["stages"]}

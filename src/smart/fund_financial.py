@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from typing import Any
+from datetime import date
+from math import isfinite
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import re
 
@@ -68,7 +70,7 @@ def parse_fund_asset_sheet(raw: str, period: str, url: str, document_id: str) ->
                 continue
             if metric in facts and facts[metric]["value"] != value:
                 raise ValueError("Conflicting fund asset cells")
-            unit = "IRR/unit" if metric == "nav_per_unit" and "ریال" in label else (
+            unit = ("IRR/unit" if "ریال" in label and "میلیون" not in label else None) if metric == "nav_per_unit" else (
                 "million_IRR" if "میلیون ریال" in normalize(raw) else None)
             if unit is None:
                 continue
@@ -164,6 +166,12 @@ def fund_financial_evidence(repository: HistoricalDataRepository, symbol: str,
                 source_error = "Net-assets sheet not advertised in cached report"
         else:
             source_error = "Official report body not cached"
+    if "nav_per_unit" in asset_cells:
+        from .data_quality_gate import publication_date
+        nav_day = publication_date(reports[-1]["period"])
+        asset_cells["nav_per_unit"].update(
+            as_of=nav_day.isoformat() if nav_day else None,
+            published_at=reports[-1]["source_date"])
     return {
         "instrument_type": "FUND", "symbol": symbol,
         "status": "PARTIAL" if observed or asset_cells else "NOT_AVAILABLE",
@@ -180,3 +188,33 @@ def fund_financial_evidence(repository: HistoricalDataRepository, symbol: str,
         "explanation": "This is an investment fund; company revenue, EPS and debt scoring do not apply. Only observed fund cells are shown.",
         "sync": repository.state(symbol, "KODAL"),
     }
+
+
+def fund_valuation(nav: dict[str, Any] | None, *, price: float | None,
+                   price_date: str | None, as_of: date) -> dict[str, Any]:
+    """Compare same-session observed NAV/unit and IRR market price only."""
+    nav = nav or {}
+    value = nav.get("value")
+    result = {"status": "UNAVAILABLE", "premium_discount_pct": None,
+              "valuation_score": None, "reason": "current_same_session_NAV_unavailable"}
+    if nav.get("unit") != "IRR/unit" or nav.get("as_of") != price_date:
+        return result
+    try:
+        day = date.fromisoformat(str(price_date))
+    except ValueError:
+        return result
+    if day > as_of or (as_of - day).days > 5:
+        return result
+    if (type(value) not in (int, float) or not isfinite(value) or value <= 0
+            or type(price) not in (int, float) or not isfinite(price) or price <= 0):
+        return result
+    from .data_quality_gate import source_date_cutoff
+    if not source_date_cutoff(nav.get("published_at"), as_of=as_of):
+        return result
+    premium = round(100 * (price / value - 1), 6)
+    return {"status": "SUCCESS", "premium_discount_pct": premium,
+            "valuation_score": round(max(0., min(100., 50 - 2 * premium)), 3),
+            "score_formula": "clip(50 - 2 * premium_discount_pct, 0, 100)",
+            "as_of": price_date, "price_IRR": price, "NAV": nav,
+            "formula": "100 * (price_IRR / NAV_IRR_per_unit - 1)",
+            "score_is_trade_decision": False}

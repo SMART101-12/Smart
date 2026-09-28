@@ -61,7 +61,8 @@ def analyze_market_regime(bundle: dict[str, Any] | None, *, as_of: date) -> dict
     equal, equal_errors = _series(bundle.get("equal_weight_index"), as_of, source=source)
     errors = sorted(set(major_errors + equal_errors))
     result = {"status": "UNAVAILABLE", "regime": "UNKNOWN", "as_of": None,
-              "source": source, "errors": errors, "evidence": {}, "conflicts": []}
+              "source": source, "errors": errors, "evidence": {}, "conflicts": [],
+              "source_validation": "VERIFIED" if bundle.get("_verified_fetch") else "DECLARED_ONLY"}
     if errors:
         return result
     # Both indices must describe the same market session.
@@ -76,9 +77,10 @@ def analyze_market_regime(bundle: dict[str, Any] | None, *, as_of: date) -> dict
               "SIDEWAYS" if abs(m) < 2 and abs(e) < 2 else "NEUTRAL")
     return {**result, "status": "SUCCESS", "regime": regime,
             "as_of": major[-1][0].isoformat(), "errors": [],
-            "evidence": {"major_20_session_change_pct": m,
-                         "equal_weight_20_session_change_pct": e,
+            "evidence": {"major_20_observation_change_pct": m,
+                         "equal_weight_20_observation_change_pct": e,
                          "major_last": major[-1][1], "equal_weight_last": equal[-1][1]},
+            "additional_evidence_unavailable": ["breadth", "aggregate_turnover", "aggregate_individual_flow"],
             "conflicts": conflicts}
 
 
@@ -88,7 +90,8 @@ def analyze_industry_regime(bundle: dict[str, Any] | None, *, symbol: str,
     bundle = bundle or {}
     result = {"status": "UNAVAILABLE", "regime": "UNKNOWN", "as_of": None,
               "industry": None, "source": bundle.get("source"), "errors": [],
-              "evidence": {}, "conflicts": []}
+              "evidence": {}, "conflicts": [],
+              "source_validation": "VERIFIED" if bundle.get("_verified_fetch") else "DECLARED_ONLY"}
     memberships = bundle.get("memberships") or []
     matched = [r for r in memberships if isinstance(r, dict) and r.get("symbol") == symbol
                and _day(r.get("effective_from")) is not None
@@ -107,9 +110,23 @@ def analyze_industry_regime(bundle: dict[str, Any] | None, *, symbol: str,
     change = _change(series)
     regime = "BULL" if change >= 3 else "BEAR" if change <= -3 else "NEUTRAL"
     result.update(status="SUCCESS", regime=regime, as_of=series[-1][0].isoformat(),
-                  evidence={"industry_20_session_change_pct": change,
+                  evidence={"industry_20_observation_change_pct": change,
                             "membership_effective_from": matched[0]["effective_from"],
                             "membership_effective_to": matched[0].get("effective_to")})
+    stock_rows, _ = _series(bundle.get("stock_series"), as_of, source=bundle.get("source"))
+    market_rows, _ = _series(bundle.get("major_index"), as_of, source=bundle.get("source"))
+    maps = [{day: value for day, value in rows} for rows in (stock_rows, series, market_rows)]
+    common = sorted(set(maps[0]) & set(maps[1]) & set(maps[2]))
+    if len(common) >= 21:
+        first, last = common[-21], common[-1]
+        returns = [values[last] / values[first] for values in maps]
+        result["evidence"].update(
+            relative_strength_vs_industry_pct=round(100 * (returns[0] / returns[1] - 1), 3),
+            relative_strength_vs_market_pct=round(100 * (returns[0] / returns[2] - 1), 3),
+            relative_strength_start=first.isoformat(), relative_strength_end=last.isoformat())
+    else:
+        result["evidence"]["relative_strength_status"] = "UNAVAILABLE"
+    result["evidence"]["peer_comparison_status"] = "UNAVAILABLE"
     return result
 
 
@@ -121,4 +138,5 @@ def load_regime_snapshot() -> dict[str, Any]:
     snapshot = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(snapshot, dict):
         raise ValueError("Market regime snapshot must be an object")
+    snapshot.pop("_verified_fetch", None)
     return snapshot
