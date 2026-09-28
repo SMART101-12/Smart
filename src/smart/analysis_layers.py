@@ -46,6 +46,7 @@ def from_legacy_summary(summary: dict[str, Any], stages: list[dict[str, Any]]) -
     setup = summary.get("entry_exit") or {}
     setup_state = summary.get("setup") or {}
     backtest = summary.get("self_test") or {}
+    audit = (summary.get("backtest") or {}).get("audit") or {}
     risk = summary.get("risk") or {}
     models = summary.get("market_models") or {}
     structure = summary.get("technical_structure") or {}
@@ -111,7 +112,8 @@ def from_legacy_summary(summary: dict[str, Any], stages: list[dict[str, Any]]) -
                        provenance={"source": market_source} if market_source else {}),
         "backtest": layer(status=state("model_self_test") if backtest else "UNAVAILABLE",
                           as_of=market_date,
-                          evidence={"validation_decision": backtest.get("decision")},
+                          evidence={"validation_decision": backtest.get("decision"),
+                                    "audit": audit},
                           errors=errors("long_only_oos", "model_self_test"),
                           data_quality="DEGRADED" if backtest else "UNAVAILABLE",
                           provenance={"source": market_source} if market_source else {}),

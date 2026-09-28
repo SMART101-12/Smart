@@ -108,6 +108,7 @@ async def run_job(job: dict[str, Any]) -> None:
     from .technical_structure import analyze_technical_structure
     from .flow_analysis import analyze_flow
     from .setup_state import assess_setup
+    from .backtest_audit import audit_backtest
     from .strategy_lab import bars_from_rows, walk_forward_exam
     from .symbol_learning import build_symbol_profile
     from .unified_evaluation import evaluate_profile
@@ -236,6 +237,8 @@ async def run_job(job: dict[str, Any]) -> None:
         return await asyncio.to_thread(evaluate_profile, profile, history)
 
     evaluation = await stage("model_self_test", self_evaluation)
+    backtest_audit = await stage("backtest_audit", lambda: asyncio.to_thread(
+        audit_backtest, profile, evaluation))
     model_backtest = (evaluation or {}).get("backtest")
     self_test = (evaluation or {}).get("self_test")
 
@@ -319,7 +322,8 @@ async def run_job(job: dict[str, Any]) -> None:
                       if key not in {"final_assessment", "scenarios"}} if row else None,
         "smart_money": (row or {}).get("smart_money"),
         "fundamental": fundamental,
-        "backtest": {"directional_exam": backtest, "long_only": model_backtest},
+        "backtest": {"directional_exam": backtest, "long_only": model_backtest,
+                     "audit": backtest_audit},
         "prediction": (profile or {}).get("current_entry") if profile and profile.get("status") == "COMPLETE" else None,
         "entry_exit": levels,
         "market_models": models,
@@ -363,6 +367,7 @@ async def run_job(job: dict[str, Any]) -> None:
                "fundamental_quality_gate": fundamental_quality,
                "technical": summary["technical"], "fundamental": fundamental,
                "backtest_status": (backtest or {}).get("status"),
+               "backtest_audit": backtest_audit,
                "long_only_oos": {"metrics": (model_backtest or {}).get("metrics"),
                                  "baseline": (model_backtest or {}).get("baseline")},
                "self_test": self_test,
