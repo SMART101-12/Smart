@@ -5,7 +5,7 @@ import json
 import os
 from datetime import datetime, timezone
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
@@ -89,6 +89,40 @@ def unified_analysis_chatgpt(symbol: str, analysis_id: str):
 @app.get("/api/analysis/{symbol}/{analysis_id}/raw")
 def unified_analysis_raw(symbol: str, analysis_id: str):
     return _read_unified_artifact(symbol, analysis_id, "raw.json")
+
+
+@app.get("/api/analysis/{symbol}/{analysis_id}/chart")
+def unified_analysis_chart(symbol: str, analysis_id: str):
+    from .archive import deduplicate_rows
+    import math
+    summary = _read_unified_artifact(symbol, analysis_id, "analysis.json")
+    raw = _read_unified_artifact(symbol, analysis_id, "raw.json")
+    gate = summary.get("quality_gate") or {}
+    excluded = {day for key in ("invalid_ohlc_dates", "missing_volume_dates",
+                                "future_dates", "incomplete_session_dates")
+                for day in gate.get(key, [])}
+    cutoff = gate.get("latest_valid_date") or summary.get("as_of")
+    rows, _ = deduplicate_rows(raw.get("history") or [], symbol=symbol)
+    bars = [{key: row[key] for key in ("source_date", "open", "high", "low", "close", "volume")}
+            for row in rows if cutoff and row["source_date"] <= cutoff
+            and row["source_date"] not in excluded
+            and all(isinstance(row.get(key), (int, float)) and math.isfinite(row[key])
+                    for key in ("open", "high", "low", "close", "volume"))
+            and 0 < row["low"] <= min(row["open"], row["close"])
+            and row["high"] >= max(row["open"], row["close"]) and row["volume"] >= 0]
+    return {"symbol": symbol, "as_of": cutoff, "source": gate.get("source"),
+            "adjustment": gate.get("corporate_action_adjustment", "UNVERIFIED"),
+            "bars": sorted(bars, key=lambda row: row["source_date"])}
+
+
+@app.get("/dashboard.js")
+@app.get("/dashboard.css")
+def dashboard_asset(request: Request):
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+    filename = request.url.path.rsplit("/", 1)[-1]
+    return FileResponse(Path(__file__).with_name(filename),
+                        media_type="text/javascript" if filename.endswith(".js") else "text/css")
 
 
 @app.get("/api/analysis/{symbol}/{analysis_id}/report")
