@@ -75,6 +75,32 @@ def latest_unified_analysis(symbol: str):
         raise HTTPException(404, detail="analysis not found") from exc
 
 
+@app.get("/api/analysis/{symbol}/history")
+def unified_analysis_history(symbol: str, limit: int = Query(20, ge=1, le=100)):
+    from .unified_analysis import _root, get_artifact
+    from .persian_text import normalize_persian_text
+    items = []
+    for path in _root().glob("*/*/job.json"):
+        try:
+            job = json.loads(path.read_text(encoding="utf-8-sig"))
+            if normalize_persian_text(job["symbol"]) != normalize_persian_text(symbol):
+                continue
+            item = {key: job.get(key) for key in
+                    ("analysis_id", "symbol", "status", "created_at", "engine_version", "stage")}
+            if path.with_name("manifest.json").exists():
+                try:
+                    report = get_artifact(job["symbol"], job["analysis_id"], "analysis.json")
+                    item.update(as_of=report.get("as_of"), decision=(report.get("decision") or {}).get("state"),
+                                failed_gates=(report.get("decision") or {}).get("failed_gates", []),
+                                self_test=(report.get("self_test") or {}).get("decision"))
+                except (ValueError, KeyError, OSError):
+                    item.update(status="INTEGRITY_ERROR")
+            items.append(item)
+        except (ValueError, KeyError, OSError):
+            continue
+    return {"symbol": symbol, "items": sorted(items, key=lambda item: item.get("created_at") or "", reverse=True)[:limit]}
+
+
 def _read_unified_artifact(symbol: str, analysis_id: str, name: str):
     from .unified_analysis import get_artifact
     try:
@@ -122,6 +148,19 @@ def unified_analysis_chart(symbol: str, analysis_id: str):
     return {"symbol": symbol, "as_of": cutoff, "source": gate.get("source"),
             "adjustment": gate.get("corporate_action_adjustment", "UNVERIFIED"),
             "bars": sorted(bars, key=lambda row: row["source_date"])}
+
+
+@app.get("/api/analysis/{symbol}/{analysis_id}/insights")
+def unified_analysis_insights(symbol: str, analysis_id: str):
+    from .analysis_insights import explain_gates, report_source_health
+    from .financial_history import HistoricalDataRepository
+    from .unified_analysis import _now
+    summary = _read_unified_artifact(symbol, analysis_id, "analysis.json")
+    cooldown = HistoricalDataRepository().state("__SOURCE__", "KODAL_HTTP")
+    return {"analysis_id": analysis_id, "report_as_of": summary.get("as_of"),
+            "gates": explain_gates(summary), "sources": report_source_health(summary),
+            "codal_cooldown": cooldown if cooldown.get("retry_at", "") > _now() else None,
+            "sources_scope": "saved_report", "checked_at": _now()}
 
 
 @app.get("/dashboard.js")
