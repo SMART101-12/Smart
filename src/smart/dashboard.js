@@ -52,10 +52,85 @@ ctx.fillStyle='#64748b';ctx.textAlign='center';for(const i of [...new Set([0,Mat
 if(this.hover!=null&&this.hover>=this.start&&this.hover<this.start+rows.length){const b=this.bars[this.hover],px=x(this.hover-this.start);ctx.strokeStyle='#91a9bc';ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(px,top);ctx.lineTo(px,h-38);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#087f8c';ctx.beginPath();ctx.arc(px,y(b.close),4,0,Math.PI*2);ctx.fill();$('chart-tooltip').textContent=dateFmt(b.source_date)+' · پایانی: '+fmt(b.close)+' · باز: '+fmt(b.open)+' · بیشینه: '+fmt(b.high)+' · کمینه: '+fmt(b.low)+' · حجم: '+fmt(b.volume)}
 }}
 const chart=new PriceChart();
-async function getJSON(url,options){const r=await fetch(url,options),data=await r.json();if(!r.ok)throw Error(typeof data.detail==='string'?data.detail:JSON.stringify(data.detail||data));return data}
-async function loadReport(symbol,id){const base='/api/analysis/'+encodeURIComponent(symbol);const data=await getJSON(id?base+'/'+encodeURIComponent(id):base+'/latest');id=data.analysis_id||id;if(!id)throw Error('شناسه گزارش موجود نیست.');renderReport(data,symbol,id);try{chart.load(await getJSON(base+'/'+encodeURIComponent(id)+'/chart'))}catch(e){chart.clear('نمودار در دسترس نیست: '+e.message)}const url=new URL(location.href);url.searchParams.set('symbol',symbol);url.searchParams.set('analysis_id',id);history.replaceState(null,'',url)}
-function show(job){$('status').textContent=label(job.status)+' · '+label(job.stage)+(job.warnings?.length?' · برخی منابع ناقص هستند':'');$('stages').replaceChildren(...(job.stages||[]).map(x=>el('li',label(x.name)+' · '+label(x.status)+' · '+fmt(x.seconds)+' ثانیه')))}
+async function getJSON(url,options={}) {
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
+    try {
+        const r=await fetch(url,{...options,signal:controller.signal}),data=await r.json();
+        if(!r.ok)throw Error(typeof data.detail==='string'?data.detail:JSON.stringify(data.detail||data));
+        return data;
+    } catch(e) {
+        if(e.name==='AbortError')throw Error('زمان انتظار اتصال پایان یافت؛ می‌توانید پیگیری را ادامه دهید.');
+        throw e;
+    } finally {clearTimeout(timer)}
+}
+function rememberJob(symbol,id) {
+    const url=new URL(location.href);
+    url.searchParams.set('symbol',symbol);url.searchParams.set('job_id',id);url.searchParams.delete('analysis_id');
+    history.replaceState(null,'',url);
+    $('resume-job').dataset.jobId=id;$('resume-job').dataset.symbol=symbol;$('resume-job').hidden=false;
+}
+async function loadReport(symbol,id) {
+    let base='/api/analysis/'+encodeURIComponent(symbol);
+    const data=await getJSON(id?base+'/'+encodeURIComponent(id):base+'/latest');
+    id=data.analysis_id||id;if(!id)throw Error('شناسه گزارش موجود نیست.');
+    symbol=data.requested_symbol||symbol;base='/api/analysis/'+encodeURIComponent(symbol);
+    renderReport(data,symbol,id);
+    try {chart.load(await getJSON(base+'/'+encodeURIComponent(id)+'/chart'))}
+    catch(e){chart.clear('نمودار در دسترس نیست: '+e.message)}
+    const url=new URL(location.href);url.searchParams.set('symbol',symbol);url.searchParams.set('analysis_id',id);url.searchParams.delete('job_id');
+    history.replaceState(null,'',url);$('resume-job').hidden=true;
+}
+Object.assign(names,{INTERRUPTED:'پردازش قطع شده؛ قابل اجرای مجدد',TIMED_OUT:'مهلت پردازش پایان یافته',SYMBOL_NOT_FOUND:'نماد پیدا نشد',queued:'در صف',finished:'پایان'});
+function show(job) {
+    $('status').textContent=label(job.status)+' · '+label(job.stage)+(job.warnings?.length?' · برخی منابع ناقص هستند':'');
+    $('stages').replaceChildren(...(job.stages||[]).map(x=>el('li',label(x.name)+' · '+label(x.status)+' · '+fmt(x.seconds)+' ثانیه')));
+}
+async function watchJob(job) {
+    const symbol=job.symbol;rememberJob(symbol,job.analysis_id);show(job);
+    for(let i=0;i<300&&['QUEUED','RUNNING'].includes(job.status);i++) {
+        await new Promise(resolve=>setTimeout(resolve,1000));
+        job=await getJSON('/api/analyze/'+encodeURIComponent(job.analysis_id));show(job);
+    }
+    if(['COMPLETED','PARTIAL'].includes(job.status))await loadReport(symbol,job.analysis_id);
+    else if(['QUEUED','RUNNING'].includes(job.status)) {
+        $('result').textContent='پردازش ادامه دارد. دکمه ادامه پیگیری را بزنید؛ بارگذاری مجدد صفحه هم به همین تحلیل وصل می‌شود.';
+        chart.clear('پردازش هنوز کامل نشده است.');
+    } else {
+        $('resume-job').hidden=true;
+        throw Error(label(job.status)+'؛ برای تلاش مجدد دکمه تحلیل سهم را بزنید.');
+    }
+}
 let busy=false;
-async function run(latest=false){const symbol=$('symbol').value.trim();if(!symbol){$('status').textContent='ابتدا نماد را وارد کنید.';$('symbol').focus();return}if(busy)return;busy=true;for(const id of ['analyze','load-latest'])$(id).disabled=true;$('result').replaceChildren(el('p','در حال بارگذاری…'));$('analysis-layers').replaceChildren();$('market-models').replaceChildren();chart.clear();try{if(latest){$('status').textContent='در حال خواندن گزارش ذخیره‌شده…';await loadReport(symbol);$('status').textContent='آخرین گزارش ذخیره‌شده نمایش داده شد.';$('stages').replaceChildren()}else{let job=await getJSON('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol})});show(job);for(let i=0;i<300&&['QUEUED','RUNNING'].includes(job.status);i++){await new Promise(resolve=>setTimeout(resolve,1000));job=await getJSON('/api/analyze/'+encodeURIComponent(job.analysis_id));show(job)}if(['COMPLETED','PARTIAL'].includes(job.status))await loadReport(symbol,job.analysis_id);else if(['QUEUED','RUNNING'].includes(job.status)){$('result').textContent='پردازش ادامه دارد. شناسه پیگیری: '+job.analysis_id;chart.clear('پردازش هنوز کامل نشده است.')}else throw Error('تحلیل تکمیل نشد.')}}catch(e){$('status').textContent='خطا: '+e.message;$('result').textContent='گزارش بارگذاری نشد؛ نماد و اتصال را بررسی کنید.';chart.clear('گزارشی برای نمایش نمودار بارگذاری نشده است.')}finally{busy=false;for(const id of ['analyze','load-latest'])$(id).disabled=false}}
-$('analyze').onclick=()=>run(false);$('load-latest').onclick=()=>run(true);$('symbol').addEventListener('keydown',e=>{if(e.key==='Enter')run(false)});
-const params=new URLSearchParams(location.search);if(params.get('symbol')){$('symbol').value=params.get('symbol');busy=true;for(const id of ['analyze','load-latest'])$(id).disabled=true;(async()=>{try{await loadReport(params.get('symbol'),params.get('analysis_id'));$('status').textContent='گزارش ذخیره‌شده نمایش داده شد.'}catch(e){$('status').textContent='خطا: '+e.message;chart.clear('گزارش بارگذاری نشد.')}finally{busy=false;for(const id of ['analyze','load-latest'])$(id).disabled=false}})()}
+async function run(latest=false,resumeId=null,reportId=null) {
+    const symbol=$('symbol').value.trim();
+    if(!symbol){$('status').textContent='ابتدا نماد را وارد کنید.';$('symbol').focus();return}
+    if(busy)return;busy=true;
+    for(const id of ['analyze','load-latest','resume-job'])$(id).disabled=true;
+    $('result').replaceChildren(el('p','در حال بارگذاری…'));
+    $('analysis-layers').replaceChildren();$('market-models').replaceChildren();chart.clear();
+    try {
+        if(latest) {
+            $('status').textContent='در حال خواندن گزارش ذخیره‌شده…';
+            await loadReport(symbol,reportId);$('status').textContent='گزارش ذخیره‌شده نمایش داده شد.';$('stages').replaceChildren();
+        } else {
+            const job=resumeId?await getJSON('/api/analyze/'+encodeURIComponent(resumeId)):
+                await getJSON('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol})});
+            await watchJob(job);
+        }
+    } catch(e) {
+        $('status').textContent='خطا: '+e.message;
+        $('result').textContent='گزارش بارگذاری نشد. اگر تحلیل فعال است، ادامه پیگیری را بزنید.';
+        chart.clear('گزارشی برای نمایش نمودار بارگذاری نشده است.');
+    } finally {
+        busy=false;for(const id of ['analyze','load-latest','resume-job'])$(id).disabled=false;
+    }
+}
+$('analyze').onclick=()=>run(false);$('load-latest').onclick=()=>run(true);
+$('resume-job').onclick=()=>{$('symbol').value=$('resume-job').dataset.symbol;run(false,$('resume-job').dataset.jobId)};
+$('symbol').addEventListener('keydown',e=>{if(e.key==='Enter')run(false)});
+const params=new URLSearchParams(location.search);
+if(params.get('symbol')) {
+    $('symbol').value=params.get('symbol');
+    if(params.get('job_id'))run(false,params.get('job_id'));
+    else run(true,null,params.get('analysis_id'));
+}

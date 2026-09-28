@@ -8,6 +8,8 @@ import os
 import re
 import time
 import uuid
+import contextlib
+from threading import RLock
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -18,6 +20,62 @@ from zoneinfo import ZoneInfo
 
 VERSION = "SMART-ANALYSIS-2.2"
 ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
+JOB_TIMEOUT_SECONDS = 1200
+STAGE_TIMEOUT_SECONDS = 180
+_job_lock = RLock()
+_active_jobs: set[str] = set()
+
+
+def _process_alive(pid: int | None) -> bool:
+    if not isinstance(pid, int) or pid <= 0:
+        return False
+    if pid == os.getpid():
+        return True
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        kernel.OpenProcess.restype = wintypes.HANDLE
+        handle = kernel.OpenProcess(0x1000, False, pid)
+        if not handle:
+            return ctypes.get_last_error() == 5  # Access denied is not proof of death.
+        try:
+            exit_code = wintypes.DWORD()
+            kernel.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+            return bool(kernel.GetExitCodeProcess(handle, ctypes.byref(exit_code))) and exit_code.value == 259
+        finally:
+            kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+            kernel.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+        return True
+    except PermissionError:
+        return True
+    except ProcessLookupError:
+        return False
+
+
+def recover_interrupted_jobs() -> list[str]:
+    """Repair mutable job state only; completed evidence is never rewritten."""
+    recovered = []
+    for path in _root().glob("*/*/job.json"):
+        try:
+            job = json.loads(path.read_text(encoding="utf-8-sig"))
+            if job.get("status") not in {"QUEUED", "RUNNING"} or _process_alive(job.get("owner_pid")):
+                continue
+            if path.with_name("manifest.json").exists():
+                report = get_artifact(job["symbol"], job["analysis_id"], "analysis.json")
+                job.update(status=report["status"], stage="finished", finished_at=_now())
+            else:
+                job.update(status="INTERRUPTED", finished_at=_now(),
+                           recovery_reason="analysis_worker_stopped", retryable=True)
+            _write(path, job)
+            recovered.append(job["analysis_id"])
+        except (ValueError, KeyError, OSError):
+            # Preserve damaged files for diagnosis rather than replacing evidence.
+            continue
+    return recovered
 
 
 def _root() -> Path:
@@ -55,11 +113,22 @@ def create_job(symbol: str) -> dict[str, Any]:
     symbol = str(symbol or "").strip()
     if not symbol or len(symbol) > 80 or any(ch in symbol for ch in "/\\\x00"):
         raise ValueError("invalid symbol")
-    job = {"analysis_id": uuid.uuid4().hex, "symbol": symbol, "status": "QUEUED",
-           "stage": "queued", "stages": [], "warnings": [], "created_at": _now(),
-           "engine_version": VERSION}
-    _write(_directory(symbol, job["analysis_id"]) / "job.json", job)
-    return job
+    from .persian_text import normalize_persian_text
+    with _job_lock:
+        for path in _root().glob("*/*/job.json"):
+            try:
+                existing = json.loads(path.read_text(encoding="utf-8-sig"))
+                if (existing.get("status") in {"QUEUED", "RUNNING"}
+                        and normalize_persian_text(existing.get("symbol")) == normalize_persian_text(symbol)
+                        and _process_alive(existing.get("owner_pid"))):
+                    return {**existing, "reused_active": True}
+            except (ValueError, OSError):
+                continue
+        job = {"analysis_id": uuid.uuid4().hex, "symbol": symbol, "status": "QUEUED",
+               "stage": "queued", "stages": [], "warnings": [], "created_at": _now(),
+               "engine_version": VERSION, "owner_pid": os.getpid(), "heartbeat_at": _now()}
+        _write(_directory(symbol, job["analysis_id"]) / "job.json", job)
+        return job
 
 
 def get_job(symbol: str, analysis_id: str) -> dict[str, Any]:
@@ -86,16 +155,57 @@ def get_artifact(symbol: str, analysis_id: str, name: str) -> Any:
 
 
 def latest(symbol: str) -> dict[str, Any]:
-    root = _root() / safe_symbol(symbol)
-    jobs = sorted(root.glob("*/job.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    from .persian_text import normalize_persian_text
+    jobs = sorted(_root().glob("*/*/job.json"), key=lambda p: p.stat().st_mtime, reverse=True)
     for path in jobs:
         job = json.loads(path.read_text(encoding="utf-8"))
-        if job["symbol"] == symbol and job["status"] in {"COMPLETED", "PARTIAL"}:
-            return get_artifact(symbol, job["analysis_id"], "analysis.json")
+        if (normalize_persian_text(job["symbol"]) == normalize_persian_text(symbol)
+                and job["status"] in {"COMPLETED", "PARTIAL"}):
+            return get_artifact(job["symbol"], job["analysis_id"], "analysis.json")
     raise FileNotFoundError(symbol)
 
 
 async def run_job(job: dict[str, Any]) -> None:
+    """Own the job lifecycle, including unexpected errors and interrupted runs."""
+    analysis_id = job["analysis_id"]
+    directory = _directory(job["symbol"], analysis_id)
+    with _job_lock:
+        if analysis_id in _active_jobs or (directory / "manifest.json").exists():
+            return
+        _active_jobs.add(analysis_id)
+    job.update(owner_pid=os.getpid(), heartbeat_at=_now())
+
+    async def heartbeat():
+        while True:
+            await asyncio.sleep(5)
+            job["heartbeat_at"] = _now()
+            _write(directory / "job.json", job)
+
+    def fail(state, error):
+        job.update(status=state, finished_at=_now(), retryable=True)
+        job.setdefault("warnings", []).append({"stage": job.get("stage"), "error": error})
+        _write(directory / "job.json", job)
+
+    monitor = asyncio.create_task(heartbeat())
+    try:
+        await asyncio.wait_for(_run_job(job), timeout=JOB_TIMEOUT_SECONDS)
+    except asyncio.CancelledError:
+        if not (directory / "manifest.json").exists():
+            fail("INTERRUPTED", "Analysis worker cancelled; retry creates a new analysis.")
+        raise
+    except TimeoutError:
+        fail("TIMED_OUT", "Analysis exceeded its execution budget.")
+    except Exception as exc:
+        fail("FAILED", str(exc))
+    finally:
+        monitor.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await monitor
+        with _job_lock:
+            _active_jobs.discard(analysis_id)
+
+
+async def _run_job(job: dict[str, Any]) -> None:
     """Keep independent source failures visible without inventing substitute facts."""
     from . import tsetmc
     from .financial_history import HistoricalDataRepository
@@ -133,13 +243,14 @@ async def run_job(job: dict[str, Any]) -> None:
         job["stage"] = name
         _write(directory / "job.json", job)
         try:
-            value = await action()
+            value = await asyncio.wait_for(action(), timeout=STAGE_TIMEOUT_SECONDS)
             reported = value.get("status") if isinstance(value, dict) else None
-            state = "PARTIAL" if reported in {"PARTIAL", "SOURCE_UNAVAILABLE", "INSUFFICIENT_HISTORY", "INSUFFICIENT_DATA", "DEGRADED", "INVALID", "UNAVAILABLE", "NOT_AVAILABLE", "CONFLICTING", "unavailable"} else "COMPLETED"
+            state = "PARTIAL" if reported in {"PARTIAL", "RATE_LIMITED", "SOURCE_UNAVAILABLE", "INSUFFICIENT_HISTORY", "INSUFFICIENT_DATA", "DEGRADED", "INVALID", "UNAVAILABLE", "NOT_AVAILABLE", "CONFLICTING", "unavailable"} else "COMPLETED"
         except Exception as exc:
             value = None
             state = "NOT_AVAILABLE"
-            job["warnings"].append({"stage": name, "error": str(exc)})
+            job["warnings"].append({"stage": name, "error":
+                                   "Stage execution budget exceeded" if isinstance(exc, TimeoutError) else str(exc)})
         job["stages"].append({"name": name, "status": state,
                               "seconds": round(time.monotonic() - start, 3)})
         with (directory / "analysis.log").open("a", encoding="utf-8") as log:

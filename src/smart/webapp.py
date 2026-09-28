@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
@@ -30,7 +31,14 @@ from .tsetmc import (
     symbol_entry_profile,
 )
 
-app = FastAPI(title="SMART Market Intelligence", version="0.5.0")
+@asynccontextmanager
+async def analysis_lifespan(app):
+    from .unified_analysis import recover_interrupted_jobs
+    recover_interrupted_jobs()
+    yield
+
+
+app = FastAPI(title="SMART Market Intelligence", version="0.5.0", lifespan=analysis_lifespan)
 
 
 class UnifiedAnalysisRequest(BaseModel):
@@ -44,7 +52,8 @@ async def start_unified_analysis(request: UnifiedAnalysisRequest, background_tas
         job = create_job(request.symbol)
     except ValueError as exc:
         raise HTTPException(422, detail=str(exc)) from exc
-    background_tasks.add_task(run_job, job)
+    if not job.get("reused_active"):
+        background_tasks.add_task(run_job, job)
     return job
 
 

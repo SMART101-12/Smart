@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import time
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from functools import lru_cache
@@ -301,6 +302,7 @@ class CodalHistoricalProvider:
     def __init__(self, client=None, repository=None):
         self.client = client
         self.repository = repository
+        self.deadline = time.monotonic() + 120
 
     def get(self, url, *, params=None):
         """Bounded retries; follow only official report redirects."""
@@ -311,7 +313,11 @@ class CodalHistoricalProvider:
         for attempt in range(3):
             try:
                 for _ in range(4):
-                    response = self.client.get(url, params=params)
+                    remaining = self.deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise httpx.TimeoutException("Codal acquisition budget exceeded")
+                    read_timeout = self.client.timeout.read or 20
+                    response = self.client.get(url, params=params, timeout=min(read_timeout, remaining))
                     if response.status_code in {301, 302, 303, 307, 308}:
                         target = urljoin(str(response.url), response.headers.get("location", ""))
                         if not source_url(target):
@@ -391,6 +397,7 @@ class CodalHistoricalProvider:
         The publication cursor (not fiscal year) discovers amendments to older
         periods. Initial discovery is bounded; incomplete pagination is explicit.
         """
+        self.deadline = time.monotonic() + 120
         if self.client is None:
             with httpx.Client(timeout=20, follow_redirects=False,
                               headers={"User-Agent": "SMART/1.0"}) as client:
@@ -458,6 +465,7 @@ class CodalHistoricalProvider:
         return {"reports": output, "rejected": rejected, "cursor": newest}
 
     def sync_company(self, symbol, *, years=5, max_pages=100, force=False):
+        self.deadline = time.monotonic() + 120
         """Checkpoint each report in SQLite; resume using cached raw assets.
 
         Category IDs were read from Codal's v1/categories response, not inferred
