@@ -6,7 +6,10 @@ an explicit fiscal end date; comparative columns cannot become current values.
 from __future__ import annotations
 
 import json
+import math
 import re
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from functools import lru_cache
 from threading import Lock
 from html.parser import HTMLParser
@@ -61,7 +64,8 @@ def statement_links(raw, url, consolidated=True):
         if not value or ("تلفیقی" in label) != consolidated:
             continue
         if not any(label == name + (" تلفیقی" if consolidated else "") for name in
-                   ("صورت سود و زیان", "صورت وضعیت مالی", "صورت جریان های نقدی")):
+                   ("صورت سود و زیان", "صورت وضعیت مالی", "صورت جریان های نقدی",
+                    "ترازنامه", "جریان وجوه نقد", "صورت جریان وجوه نقد")):
             continue
         parts = urlsplit(url)
         query = [(k, v) for k, v in parse_qsl(parts.query) if k != "sheetId"]
@@ -157,6 +161,31 @@ def embedded_tables(raw):
     return tables
 
 
+def fiscal_columns(table, period):
+    """Resolve one explicitly dated column per advertised description block.
+
+    Old balance sheets place assets and liabilities side by side. Two date
+    columns in the same block remain ambiguous and are never selected.
+    """
+    dates, descriptions = set(), {0}
+    for row in table:
+        if any(metric_label(cell).rstrip(":") in ALIASES for cell in row):
+            break
+        for index, cell in enumerate(row):
+            if metric_label(cell) in {"شرح", "شرح حساب", "عنوان"}:
+                descriptions.add(index)
+            if re.findall(r"1[34]\d{2}/\d{2}/\d{2}", cell) == [period]:
+                dates.add(index)
+    starts = sorted(descriptions)
+    groups = []
+    for index, start in enumerate(starts):
+        end = starts[index + 1] if index + 1 < len(starts) else max((len(row) for row in table), default=0)
+        selected = [column for column in dates if start < column < end]
+        if len(selected) == 1:
+            groups.append((start, selected[0], end))
+    return groups
+
+
 def parse_document(letter, raw, symbol, url):
     if raw.lstrip().startswith('{"codal_bundle":'):
         bundle = json.loads(raw)
@@ -208,40 +237,34 @@ def parse_document(letter, raw, symbol, url):
         raise ValueError("Missing or ambiguous statement unit")
     metrics = {}
     for ti, table in enumerate(parser.tables + embedded_tables(raw)):
-        columns = set()
+        groups = fiscal_columns(table, period)
         for ri, row in enumerate(table):
-            # Only header cells select columns, never labels or data cells.
-            if not any(metric_label(cell).rstrip(":") in ALIASES for cell in row):
-                for ci, cell in enumerate(row):
-                    dates = re.findall(r"1[34]\d{2}/\d{2}/\d{2}", cell)
-                    if dates == [period]:
-                        columns.add(ci)
-            if len(columns) != 1:
-                continue
-            ci = next(iter(columns))
-            for label in row[:ci]:
-                metric = ALIASES.get(metric_label(label).rstrip(":"))
-                if not metric or ci >= len(row):
-                    continue
-                if not any(str(v).strip() for v in row[ci:]):
-                    # Empty section headings are not reported metric rows.
-                    continue
-                # Per-share/unit-rate/quantity fields require their own explicit unit.
-                unit = "IRR/share" if metric in {"eps", "dps"} else units[0]
-                if metric in {"shares", "production", "sales_quantity", "sales_rate"}:
-                    continue
-                item = {"value": number(row[ci]), "unit": unit,
-                        "locator": f"table:{ti}/row:{ri}/column:{ci}"}
-                if metric in metrics and metrics[metric]["value"] != item["value"]:
-                    raise ValueError(f"Ambiguous metric: {metric}")
-                metrics[metric] = item
+            for start, ci, end in groups:
+                for label in row[start:ci]:
+                    metric = ALIASES.get(metric_label(label).rstrip(":"))
+                    if not metric or ci >= len(row):
+                        continue
+                    if not any(str(v).strip() for v in row[ci:end]):
+                        # Empty section headings are not reported metric rows.
+                        continue
+                    # Per-share/unit-rate/quantity fields require their own explicit unit.
+                    unit = "IRR/share" if metric in {"eps", "dps"} else units[0]
+                    if metric in {"shares", "production", "sales_quantity", "sales_rate"}:
+                        continue
+                    item = {"value": number(row[ci]), "unit": unit,
+                            "locator": f"table:{ti}/row:{ri}/column:{ci}"}
+                    if metric in metrics and metrics[metric]["value"] != item["value"]:
+                        raise ValueError(f"Ambiguous metric: {metric}")
+                    metrics[metric] = item
     if not metrics:
         raise ValueError("Unsupported Codal layout or no unambiguous fiscal column")
     # A consolidated announcement can contain both separate and group sheets.
     selected = re.search(r'<option\b(?=[^>]*selected)[^>]*>([^<]*)', raw)
     basis = "consolidated" if "تلفیقی" in title else "standalone"
-    if selected and "صورت" in selected[1] and "نظر حسابرس" not in selected[1]:
-        basis = "consolidated" if "تلفیقی" in selected[1] else "standalone"
+    selected_label = normalize(selected[1]) if selected else ""
+    if selected_label and any(term in selected_label for term in
+                              ("صورت", "ترازنامه", "جریان وجوه نقد")) and "نظر حسابرس" not in selected_label:
+        basis = "consolidated" if "تلفیقی" in selected_label else "standalone"
     year_end = re.search(r'id=["\']ctl00_lblYearEndToDate["\'][^>]*>(.*?)</span>', raw, re.S)
     fiscal_year_end = None
     if year_end:
@@ -281,6 +304,10 @@ class CodalHistoricalProvider:
 
     def get(self, url, *, params=None):
         """Bounded retries; follow only official report redirects."""
+        cooldown = self.repository.state("__SOURCE__", "KODAL_HTTP") if self.repository else {}
+        retry_at = cooldown.get("retry_at")
+        if retry_at and datetime.fromisoformat(retry_at) > datetime.now(timezone.utc):
+            raise httpx.HTTPError("HTTP 429: Codal cooldown until " + retry_at)
         for attempt in range(3):
             try:
                 for _ in range(4):
@@ -291,6 +318,24 @@ class CodalHistoricalProvider:
                             raise ValueError("Untrusted report redirect")
                         url, params = target, None
                         continue
+                    if response.status_code == 429:
+                        raw_retry = response.headers.get("Retry-After", "")
+                        try:
+                            seconds = float(raw_retry)
+                        except ValueError:
+                            try:
+                                deadline = parsedate_to_datetime(raw_retry)
+                                if deadline.tzinfo is None:
+                                    deadline = deadline.replace(tzinfo=timezone.utc)
+                                seconds = (deadline - datetime.now(timezone.utc)).total_seconds()
+                            except (ValueError, TypeError, OverflowError):
+                                seconds = 300
+                        seconds = max(1, min(seconds, 86400)) if math.isfinite(seconds) else 300
+                        if self.repository:
+                            self.repository.record_sync("__SOURCE__", "KODAL_HTTP", {
+                                "status": "RATE_LIMITED", "http_status": 429,
+                                "retry_at": (datetime.now(timezone.utc) + timedelta(seconds=seconds)).isoformat(),
+                                "retry_after_seconds": seconds})
                     response.raise_for_status()
                     return response
                 raise ValueError("Too many report redirects")
@@ -298,7 +343,7 @@ class CodalHistoricalProvider:
                 if attempt == 2:
                     raise
             except httpx.HTTPStatusError as exc:
-                if attempt == 2 or (exc.response.status_code < 500 and exc.response.status_code != 429):
+                if attempt == 2 or exc.response.status_code < 500:
                     raise
 
     def download(self, symbol, docid, url, refresh=False):
