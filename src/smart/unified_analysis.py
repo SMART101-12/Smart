@@ -226,6 +226,7 @@ async def _run_job(job: dict[str, Any]) -> None:
     from .strategy_lab import bars_from_rows, walk_forward_exam
     from .symbol_learning import build_symbol_profile
     from .unified_evaluation import evaluate_profile
+    from .research_cache import cached_research
     from dataclasses import asdict
 
     symbol, analysis_id = job["symbol"], job["analysis_id"]
@@ -380,16 +381,28 @@ async def _run_job(job: dict[str, Any]) -> None:
         # Bound research to recent observations while retaining the terminal
         # holdout. Capping decisions would instead examine only the oldest days.
         recent = [asdict(bar) for bar in bars_from_rows(analysis_history)[-300:]]
-        return await asyncio.to_thread(walk_forward_exam, recent, symbol=symbol)
+        value, cache = await cached_research("historical_exam", {
+            "symbol": symbol, "history": recent, "engine_version": VERSION,
+            "configuration": configuration,
+            "parameters": {"initial_history": 20, "evaluation_window": 30, "horizon": 5}},
+            lambda: asyncio.to_thread(walk_forward_exam, recent, symbol=symbol))
+        research_cache["historical_exam"] = cache
+        return value
 
+    research_cache = {}
     backtest = await stage("historical_exam", exam)
 
     async def long_only():
         if not analysis_history:
             raise ValueError("no historical bars")
-        return await asyncio.to_thread(build_symbol_profile, analysis_history, symbol=symbol,
-                                       transaction_cost_pct=0.35, persist=False,
-                                       source_metadata={"source": "TSETMC", "ins_code": ins_code})
+        metadata = {"source": "TSETMC", "ins_code": ins_code}
+        value, cache = await cached_research("long_only_oos", {
+            "symbol": symbol, "history": analysis_history, "engine_version": VERSION,
+            "configuration": configuration, "transaction_cost_pct": 0.35, "source_metadata": metadata},
+            lambda: asyncio.to_thread(build_symbol_profile, analysis_history, symbol=symbol,
+                                      transaction_cost_pct=0.35, persist=False, source_metadata=metadata))
+        research_cache["long_only_oos"] = cache
+        return value
 
     profile = await stage("long_only_oos", long_only)
 
@@ -529,6 +542,7 @@ async def _run_job(job: dict[str, Any]) -> None:
     }
     summary["decision"] = decide(summary, weights=configuration["decision_weights"])
     summary["confidence_evidence"] = summary["decision"]["confidence"]
+    summary["research_cache"] = research_cache
     summary["final_engine_output"]["assessment"] = summary["decision"]["state"]
     summary.update(from_legacy_summary(summary, job["stages"]))
     context = {"instruction": "Use only supplied validated data. Separate observed facts, calculated metrics and uncertainty. Never invent numbers.",
@@ -551,7 +565,8 @@ async def _run_job(job: dict[str, Any]) -> None:
                "decision": summary["decision"],
                "confidence_evidence": summary["confidence_evidence"],
                "layers": summary["layers"], "contract_version": summary["contract_version"],
-               "risk": summary["risk"], "missing_data": missing, "warnings": job["warnings"]}
+               "risk": summary["risk"], "research_cache": research_cache,
+               "missing_data": missing, "warnings": job["warnings"]}
     raw = {"symbol_resolution": found, "market_analysis": row, "history": history,
            "symbol_profile": profile, "regime_source_errors": (regime or {}).get("source_errors", [])}
     model_card = {"engine_version": (profile or {}).get("engine_version"),
