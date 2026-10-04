@@ -48,8 +48,24 @@ def analyze_flow(history: list[dict[str, Any]], *, symbol: str, as_of: date,
         observed = {"status": "SUCCESS", "signal": "BULLISH" if net > 0 else "BEARISH" if net < 0 else "NEUTRAL",
                     "as_of": day.isoformat(), "net_individual_volume": net,
                     "individual_buy_power": round(power, 3) if power is not None else None,
-                    "source": observation["source"]}
+                    "source": observation["source"], "source_sha256": observation.get("source_sha256"),
+                    "ins_code": observation.get("ins_code")}
     conflicts = []
+    corporate = [observation.get(k) for k in ("buy_corporate_volume", "sell_corporate_volume")]
+    if observed["status"] == "SUCCESS" and "buy_corporate_volume" in observation and not all(
+            type(v) in (int, float) and isfinite(v) and v >= 0 for v in corporate):
+        conflicts.append("client_type_corporate_volume_unavailable")
+    elif observed["status"] == "SUCCESS" and rows and all(
+            type(v) in (int, float) and isfinite(v) and v >= 0 for v in corporate):
+        total_buy = buy + corporate[0]
+        total_sell = sell + corporate[1]
+        volume = rows[-1]["volume"]
+        observed["reported_total_buy_volume"] = total_buy
+        observed["reported_total_sell_volume"] = total_sell
+        if abs(total_buy - total_sell) > max(1, total_buy * 1e-6):
+            conflicts.append("client_type_buy_sell_totals_differ")
+        if day == parse_market_date(rows[-1]["source_date"]) and abs(total_buy - volume) > max(1, volume * 1e-6):
+            conflicts.append("client_type_and_OHLCV_volume_mismatch")
     if observed["status"] == "SUCCESS" and proxy["status"] == "SUCCESS":
         if observed["signal"] == "BEARISH" and proxy["signal"] == "BULLISH":
             conflicts.append("rising_price_volume_with_individual_outflow")

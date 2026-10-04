@@ -20,9 +20,11 @@ from smart import symbol_learning
 @pytest.fixture(autouse=True)
 def offline_index_context(monkeypatch):
     from smart import index_context_source
+    from smart import client_type_source
     async def empty_context(**kwargs):
         return {}
     monkeypatch.setattr(index_context_source, "fetch_index_context", empty_context)
+    monkeypatch.setattr(client_type_source, "fetch_client_type_evidence", empty_context)
 
 
 def test_windows_job_polling_lock_retries_atomic_write(monkeypatch, tmp_path):

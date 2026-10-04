@@ -6,13 +6,14 @@ import hashlib
 import json
 import os
 import uuid
+import re
 from datetime import date
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
 from .archive import parse_market_date
 from .financial_history import normalize
+from .official_source_cache import cached_response
 
 INDEX_IDS = {"major": ("32097828799138957", "شاخص کل"),
              "equal": ("67130298613737946", "شاخص کل (هم وزن)")}
@@ -80,14 +81,25 @@ async def fetch_index_context(*, symbol: str, ins_code: str, is_fund: bool,
             sector = normalize((instrument.get("sector") or {}).get("lSecVal"))
             if not sector or parse_market_date(instrument.get("dEven")) != as_of:
                 raise ValueError("Current dated sector identity unavailable")
-            candidates = (await getter(f"/Instrument/GetInstrumentSearch/{quote(sector)}")).get("instrumentSearch") or []
-            matches = [r for r in candidates if str(r.get("yVal")) == "68" and
-                       normalize(r.get("lVal30")) in {sector, "شاخص " + sector}]
+            catalog, catalog_sha = await cached_response("/Index/GetIndexB1LastAll/AllIndexes/1",
+                                                         as_of=as_of, getter=getter, root=root / "catalog")
+            sector_code = normalize((instrument.get("sector") or {}).get("cSecVal", ""))
+            matches = []
+            for candidate in catalog.get("indexB1") or []:
+                if not isinstance(candidate, dict):
+                    continue
+                title = normalize(candidate.get("lVal30", ""))
+                coded = re.fullmatch(r"(\d{2})\s*-\s*(.+)", title)
+                if coded and normalize(coded[2]) == sector and (not sector_code or coded[1] == sector_code):
+                    matches.append(candidate)
             if len(matches) != 1:
                 raise ValueError("Unambiguous official industry index unavailable")
             chosen = matches[0]
             industry_rows = await index(str(chosen["insCode"]), chosen["lVal30"])
             bundle["industry_indices"][sector] = industry_rows
+            bundle["industry_identity"] = {"ins_code": str(chosen["insCode"]),
+                                            "official_name": chosen["lVal30"], "sector_code": sector_code,
+                                            "catalog_sha256": catalog_sha}
             bundle["memberships"] = [{"symbol": symbol, "industry": sector,
                                        "effective_from": as_of.isoformat(), "effective_to": as_of.isoformat()}]
         except (ValueError, RuntimeError, OSError, KeyError) as exc:

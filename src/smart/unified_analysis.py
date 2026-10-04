@@ -18,7 +18,7 @@ from urllib.parse import quote
 from .archive import safe_symbol, deduplicate_rows
 from zoneinfo import ZoneInfo
 
-VERSION = "SMART-ANALYSIS-2.2"
+VERSION = "SMART-ANALYSIS-2.3"
 ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 JOB_TIMEOUT_SECONDS = 1200
 STAGE_TIMEOUT_SECONDS = 180
@@ -219,6 +219,7 @@ async def _run_job(job: dict[str, Any]) -> None:
     from .index_context_source import fetch_index_context
     from .technical_structure import analyze_technical_structure
     from .flow_analysis import analyze_flow
+    from .client_type_source import fetch_client_type_evidence
     from .setup_state import assess_setup
     from .backtest_audit import audit_backtest
     from .final_decision import decide
@@ -437,10 +438,13 @@ async def _run_job(job: dict[str, Any]) -> None:
     structure = await stage("technical_structure", lambda: asyncio.to_thread(
         analyze_technical_structure, analysis_history, symbol=symbol,
         as_of=date.fromisoformat(quality_gate["as_of"]), weights=configuration["technical_weights"]))
+    client_observation = await stage("dated_client_type", lambda: fetch_client_type_evidence(
+        ins_code=ins_code, price_date=quality_gate.get("latest_valid_date"),
+        as_of=date.fromisoformat(quality_gate["as_of"])))
     flow_analysis = await stage("money_flow", lambda: asyncio.to_thread(
         analyze_flow, analysis_history, symbol=symbol,
         as_of=date.fromisoformat(quality_gate["as_of"]),
-        client_type=(row or {}).get("client_type_observation")))
+        client_type=client_observation))
     setup_state = await stage("setup_state", lambda: asyncio.to_thread(
         assess_setup, levels, gate=quality_gate,
         market=(regime or {}).get("market"), industry=(regime or {}).get("industry"),
@@ -568,6 +572,7 @@ async def _run_job(job: dict[str, Any]) -> None:
                "risk": summary["risk"], "research_cache": research_cache,
                "missing_data": missing, "warnings": job["warnings"]}
     raw = {"symbol_resolution": found, "market_analysis": row, "history": history,
+           "dated_client_type": client_observation,
            "symbol_profile": profile, "regime_source_errors": (regime or {}).get("source_errors", [])}
     model_card = {"engine_version": (profile or {}).get("engine_version"),
                   "selected_model": (profile or {}).get("selected_model"),

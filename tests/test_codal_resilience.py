@@ -57,3 +57,22 @@ def test_expired_cooldown_allows_a_new_request(tmp_path):
         "retry_at": (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()})
     with httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json={}))) as client:
         assert CodalHistoricalProvider(client, repo).get("https://www.codal.ir/report").status_code == 200
+
+
+def test_old_out_of_scope_layout_does_not_force_download_or_hide_its_exclusion():
+    letters = [
+        {"Symbol": "TEST", "Title": "صورتهای مالی 12 ماهه منتهی به 1404/12/29 حسابرسی شده",
+         "TracingNo": "known", "PublishDateTime": "1405/03/01", "Url": "/Reports/current"},
+        {"Symbol": "TEST", "Title": "صورتهای مالی 12 ماهه منتهی به 1390/12/29 حسابرسی شده",
+         "TracingNo": "ancient", "PublishDateTime": "1391/03/01", "Url": "/Reports/unsupported"}]
+    calls = []
+    def get(request):
+        calls.append(str(request.url))
+        assert request.url.host == "search.codal.ir"
+        return httpx.Response(200, json={"Letters": letters, "TotalPages": 1})
+    with httpx.Client(transport=httpx.MockTransport(get)) as client:
+        result = CodalHistoricalProvider(client).fetch("TEST", {"known"})
+    assert len(calls) == 1
+    assert result["rejected"] == [] and result["reports"] == []
+    assert result["excluded_documents"][0]["document_id"] == "ancient"
+    assert result["discovery_scope"]["minimum_fiscal_year"] == 1399

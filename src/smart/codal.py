@@ -50,6 +50,7 @@ def metric_label(value):
 
 
 ALIASES = {metric_label(k): v for k, v in ALIASES.items()}
+PARSER_VERSION = "CODAL-PARSER-2"
 
 
 def statement_links(raw, url, consolidated=True):
@@ -402,7 +403,11 @@ class CodalHistoricalProvider:
             with httpx.Client(timeout=20, follow_redirects=False,
                               headers={"User-Agent": "SMART/1.0"}) as client:
                 return CodalHistoricalProvider(client, self.repository).fetch(symbol, known_ids, publication_cursor, years)
-        output, rejected, periods = [], [], set()
+        output, rejected, periods, excluded = [], [], set(), []
+        existing = self.repository.reports(symbol) if self.repository else []
+        latest_year = max((int(r["period"][:4]) for r in existing
+                           if r["report_type"] == "annual"), default=None)
+        discovered_years = set()
         downloaded = set(known_ids)
         seen_pages = set()
         newest = publication_cursor
@@ -437,9 +442,18 @@ class CodalHistoricalProvider:
                 if publication:
                     newest = max(newest or publication, publication)
                 changed = self.repository.announcement_changed(symbol, letter) if self.repository else False
-                if docid in downloaded and not changed:
-                    continue
                 if not ("12 ماهه" in title or "سال مالی" in title) or "صورت" not in title or "مالی" not in title:
+                    continue
+                fiscal = re.search(r"منتهی به\s*(1[34]\d{2})/\d{2}/\d{2}", title)
+                if fiscal:
+                    fiscal_year = int(fiscal[1])
+                    latest_year = max(latest_year or fiscal_year, fiscal_year)
+                    if fiscal_year < latest_year - years:
+                        excluded.append({"document_id": docid, "fiscal_year": fiscal_year,
+                                         "reason": "outside_requested_financial_window"})
+                        continue
+                    discovered_years.add(fiscal_year)
+                if docid in downloaded and not changed:
                     continue
                 url = urljoin("https://www.codal.ir/", letter.get("Url", ""))
                 try:
@@ -458,11 +472,15 @@ class CodalHistoricalProvider:
             total_pages = data.get("TotalPages")
             if isinstance(total_pages, int) and total_pages > 0 and page >= total_pages:
                 break
-            if not publication_cursor and len(periods) >= years + 1:
+            if not publication_cursor and len(discovered_years) >= years + 1:
                 break
         else:
             rejected.append({"error": "Codal pagination limit reached; discovery incomplete"})
-        return {"reports": output, "rejected": rejected, "cursor": newest}
+        return {"reports": output, "rejected": rejected, "cursor": newest,
+                "excluded_documents": excluded,
+                "discovery_scope": {"latest_fiscal_year": latest_year,
+                                    "minimum_fiscal_year": latest_year - years if latest_year else None,
+                                    "years_requested": years}}
 
     def sync_company(self, symbol, *, years=5, max_pages=100, force=False):
         self.deadline = time.monotonic() + 120
@@ -603,6 +621,8 @@ class HistoricalDataSyncManager:
         config = settings()
         repo = self.repository
         state = repo.state(symbol, "KODAL")
+        if state.get("parser_version") != PARSER_VERSION:
+            return None
         if repo.fresh(symbol, "KODAL", config["sync_ttl_seconds"]):
             return dict(state, reused_local=True)
         if state.get("status") not in {"PARTIAL", "SOURCE_UNAVAILABLE"}:
@@ -632,6 +652,7 @@ class HistoricalDataSyncManager:
                 return cached
         state = repo.state(symbol, "KODAL")
         result = {"source": "KODAL", "symbol": symbol, "inserted": 0, "updated": 0,
+                  "parser_version": PARSER_VERSION,
                   "skipped": 0, "rejected": [], "records_received": 0,
                   "cursor": state.get("cursor"), "status": "SUCCESS",
                   "last_sync_date": state.get("last_sync_date")}
@@ -642,10 +663,14 @@ class HistoricalDataSyncManager:
             fiscal_years = {int(r["period"][:4]) for r in annual}
             expected = set(range(max(fiscal_years) - config["years"] + 1, max(fiscal_years) + 1)) if fiscal_years else set()
             covered = len(fiscal_years) >= config["years"] and expected <= fiscal_years
-            cursor = state.get("cursor") if covered and not state.get("rejected") else None
-            batch = self.provider.fetch(symbol, repo.known_documents(symbol), cursor, config["years"])
+            current_parser = state.get("parser_version") == PARSER_VERSION
+            cursor = state.get("cursor") if current_parser and covered and not state.get("rejected") else None
+            known = repo.known_documents(symbol) if current_parser else set()
+            batch = self.provider.fetch(symbol, known, cursor, config["years"])
             result["records_received"] = len(batch["reports"])
             result["rejected"] = list(batch["rejected"])
+            result["excluded_documents"] = batch.get("excluded_documents", [])
+            result["discovery_scope"] = batch.get("discovery_scope")
             for report, raw in batch["reports"]:
                 try:
                     result[repo.save_report(report, raw)] += 1
