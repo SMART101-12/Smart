@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import json
 import os
+from typing import Any, Callable
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, FiniteFloat, StrictBool
 
 from .ai import ask_model, ask_structured_analysis, healthcheck
 from .analysis_contract import build_structured_analysis
@@ -39,6 +40,19 @@ async def analysis_lifespan(app):
 
 
 app = FastAPI(title="SMART Market Intelligence", version="0.5.0", lifespan=analysis_lifespan)
+
+
+@app.get("/positions", response_class=HTMLResponse)
+def positions_page() -> str:
+    from .positions_ui import HTML
+    return HTML
+
+
+@app.get("/positions.js")
+def positions_script():
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+    return FileResponse(Path(__file__).with_name("positions.js"), media_type="text/javascript")
 
 
 class UnifiedAnalysisRequest(BaseModel):
@@ -258,8 +272,10 @@ def financial_history(symbol: str = Query(min_length=1, max_length=80),
         raise HTTPException(400, "Invalid consolidation basis")
     repository = HistoricalDataRepository()
     if sync:
-        HistoricalDataSyncManager(repository).sync_financial(symbol)
-    return FinancialScoringEngine(repository).analyze(symbol, basis)
+        HistoricalDataSyncManager(repository).sync_company(symbol)
+    from .company_financials import company_dataset
+    return dict(FinancialScoringEngine(repository).analyze(symbol, basis),
+                company_reports=company_dataset(repository, symbol))
 
 
 @app.get("/api/financial-history/audit")
@@ -269,6 +285,74 @@ def financial_history_audit(symbol: str = Query(min_length=1, max_length=80)):
     return {"symbol": symbol, "sync_log": repo.audit(symbol),
             "versions": [r for basis in ("standalone", "consolidated")
                          for r in repo.reports(symbol, basis, selected=False)]}
+
+
+@app.get("/financial-reports", response_class=HTMLResponse)
+def codal_reports_page() -> str:
+    from .codal_reports_ui import HTML
+    return HTML
+
+
+@app.get("/codal-reports.js")
+def codal_reports_script():
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+    return FileResponse(Path(__file__).with_name("codal-reports.js"), media_type="text/javascript")
+
+
+@app.get("/api/company-reports")
+def company_reports(symbol: str = Query(min_length=1, max_length=80), sync: bool = False) -> dict:
+    from .financial_history import HistoricalDataRepository
+    from .codal import HistoricalDataSyncManager
+    from .company_financials import company_dataset
+    from .codal_access import assistance_info
+    repo = HistoricalDataRepository()
+    state = (HistoricalDataSyncManager(repo).sync_company(symbol, force=True) if sync
+             else repo.state(symbol, "KODAL_COMPANY"))
+    return dict(company_dataset(repo, symbol), sync=state, assistance=assistance_info(repo, symbol))
+
+
+class CodalAssistanceRequest(BaseModel):
+    symbol: str = Field(min_length=1, max_length=80)
+    session_id: str = Field(min_length=16, max_length=128)
+
+
+class CodalVerificationRequest(CodalAssistanceRequest):
+    code: str = Field(min_length=1, max_length=10)
+
+
+def _codal_assist(request: CodalAssistanceRequest, code: str | None = None) -> dict:
+    import httpx
+    from .codal import _sync_lock
+    from .codal_access import access_session
+    from .financial_history import HistoricalDataRepository, normalize
+    repo = HistoricalDataRepository()
+    try:
+        with _sync_lock(str(repo.path.resolve()), normalize(request.symbol)):
+            with access_session(repo, request.symbol, create=False) as access:
+                if access is None:
+                    raise ValueError("Verification session expired; press resume to obtain a new challenge")
+                if code is None:
+                    return access.image(request.session_id)
+                return {"verified": access.verify(request.session_id, code)}
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, "Codal verification service unavailable; saved reports are preserved") from exc
+
+
+@app.post("/api/codal-assistance/image")
+def codal_assistance_image(request: CodalAssistanceRequest) -> dict:
+    return _codal_assist(request)
+
+
+@app.post("/api/codal-assistance/verify")
+def codal_assistance_verify(request: CodalVerificationRequest) -> dict:
+    result = _codal_assist(request, request.code)
+    if not result["verified"]:
+        return result
+    # Continue with the same HTTP client and checkpointed reports after user verification.
+    return dict(result, reports=company_reports(request.symbol, sync=True))
 
 
 @app.get("/financial-history.js")
@@ -309,6 +393,7 @@ class PositionSizeRequest(BaseModel):
     max_allocation_percent: float = 25.0
     fee_percent: float = 0.0
     slippage_percent: float = 0.0
+    lot_size: int = Field(default=1, ge=1, strict=True)
 
 
 class PortfolioRequest(BaseModel):
@@ -324,7 +409,129 @@ class TradePlanRequest(BaseModel):
 @app.post("/api/trade-plan")
 def calculate_trade_plan(request: TradePlanRequest) -> dict:
     from smart_v2.analysis.service import AnalysisService
-    return AnalysisService().trade_plan(request.records, request.symbol, request.tf)
+    from smart_v2.analysis.trade_policy import TradePolicy
+    from .analysis_settings import load_analysis_configuration
+    policy = TradePolicy(**load_analysis_configuration()["trade_policy"])
+    return AnalysisService().trade_plan(request.records, request.symbol, request.tf, policy=policy)
+
+
+class PositionReviewRequest(BaseModel):
+    entry_price: FiniteFloat = Field(gt=0)
+    stop: FiniteFloat = Field(gt=0)
+    tp1: FiniteFloat = Field(gt=0)
+    tp2: FiniteFloat = Field(gt=0)
+    bar: dict
+    as_of: date
+    holding_sessions: int = Field(ge=1, strict=True)
+    tp1_taken: StrictBool = False
+
+
+class OpenPositionRequest(BaseModel):
+    request_id: str = Field(min_length=8, max_length=128)
+    symbol: str = Field(min_length=1, max_length=80)
+    mode: str
+    entry_date: date
+    entry_price: FiniteFloat = Field(gt=0)
+    quantity: int = Field(gt=0, strict=True)
+    stop: FiniteFloat = Field(gt=0)
+    tp1: FiniteFloat = Field(gt=0)
+    tp2: FiniteFloat = Field(gt=0)
+    entry_fee: FiniteFloat = Field(default=0, ge=0)
+
+
+class ExitFillRequest(BaseModel):
+    request_id: str = Field(min_length=8, max_length=128)
+    fill_date: date
+    price: FiniteFloat = Field(gt=0)
+    quantity: int = Field(gt=0, strict=True)
+    fee: FiniteFloat = Field(default=0, ge=0)
+    reason: str = "MANUAL"
+
+
+class RaiseStopRequest(BaseModel):
+    request_id: str = Field(min_length=8, max_length=128)
+    stop: FiniteFloat = Field(gt=0)
+    effective_on: date
+
+
+def _position_action(action: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+    try:
+        return action()
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@app.get("/api/positions")
+def list_positions() -> dict:
+    from .position_store import PositionStore
+    return {"positions": PositionStore().list()}
+
+
+@app.post("/api/positions", status_code=201)
+def open_reported_position(request: OpenPositionRequest) -> dict:
+    from .position_store import PositionStore
+    from .analysis_settings import load_analysis_configuration
+    from smart_v2.analysis.trade_policy import TradePolicy
+    return _position_action(lambda: PositionStore().open(**request.model_dump(),
+        policy=TradePolicy(**load_analysis_configuration()["trade_policy"])))
+
+
+@app.get("/api/positions/{position_id}")
+def get_position(position_id: str) -> dict:
+    from .position_store import PositionStore
+    return _position_action(lambda: PositionStore().get(position_id))
+
+
+@app.post("/api/positions/{position_id}/fills")
+def report_exit_fill(position_id: str, request: ExitFillRequest) -> dict:
+    from .position_store import PositionStore
+    return _position_action(lambda: PositionStore().exit_fill(position_id, **request.model_dump()))
+
+
+@app.post("/api/positions/{position_id}/stop")
+def report_stop_change(position_id: str, request: RaiseStopRequest) -> dict:
+    from .position_store import PositionStore
+    return _position_action(lambda: PositionStore().raise_stop(position_id, **request.model_dump()))
+
+
+@app.post("/api/positions/{position_id}/review")
+async def refresh_position_review(position_id: str) -> dict:
+    """Independent exit review; no Codal or backtest dependency."""
+    import asyncio
+    from zoneinfo import ZoneInfo
+    from . import tsetmc
+    from .archive import parse_market_date
+    from .position_store import PositionStore
+    store = PositionStore()
+    position = _position_action(lambda: store.get(position_id))
+    today = datetime.now(ZoneInfo("Asia/Tehran")).date()
+    try:
+        found = await asyncio.wait_for(tsetmc.search_symbol(position["symbol"]), timeout=20)
+        rows = await asyncio.wait_for(tsetmc.daily_history(str(found["insCode"])), timeout=60)
+        completed = [r for r in rows if (d := parse_market_date(r.get("source_date") or r.get("date") or r.get("dEven"))) and d < today]
+        latest = max((parse_market_date(r.get("source_date") or r.get("date") or r.get("dEven")) for r in completed), default=None)
+        if latest is None or (today - latest).days > 3:
+            return {"status": "insufficient_data", "action": "REVIEW_DATA",
+                    "reason": "No recent completed session; position unchanged"}
+        return _position_action(lambda: store.review(position_id, completed, as_of=latest))
+    except (TimeoutError, tsetmc.TSETMCError, RuntimeError, KeyError, ValueError) as exc:
+        return {"status": "source_error", "action": "REVIEW_DATA", "reason": str(exc),
+                "position_unchanged": True}
+
+
+@app.post("/api/risk/review-position")
+def review_open_position(request: PositionReviewRequest) -> dict:
+    """Review caller-supplied holdings; no order, fill or position is persisted."""
+    from .position_review import review_position
+    from .analysis_settings import load_analysis_configuration
+    from smart_v2.analysis.trade_policy import TradePolicy
+    try:
+        return review_position(**request.model_dump(),
+            policy=TradePolicy(**load_analysis_configuration()["trade_policy"]))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 class DailyRunRequest(BaseModel):

@@ -11,3 +11,4 @@ requests>=2.31
 mcp>=1.0,<2
 openai>=1.66
 python-dotenv>=1.0
+persiantools>=5.2.1,<6

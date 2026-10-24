@@ -26,6 +26,8 @@ def trade_plan(entry: float, stop: float, target: float) -> dict:
 
 
 def _finite_positive(value: Any, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be a finite positive number")
     try:
         result = float(value)
     except (TypeError, ValueError) as exc:
@@ -36,6 +38,8 @@ def _finite_positive(value: Any, name: str) -> float:
 
 
 def _finite_nonnegative(value: Any, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be a finite non-negative number")
     try:
         result = float(value)
     except (TypeError, ValueError) as exc:
@@ -55,6 +59,7 @@ def position_size(
     max_allocation_percent: float = 25.0,
     fee_percent: float = 0.0,
     slippage_percent: float = 0.0,
+    lot_size: int = 1,
 ) -> dict[str, Any]:
     """Calculate a long-only position size from a fixed account risk budget.
 
@@ -70,8 +75,14 @@ def position_size(
     if stop_price >= entry_price:
         raise ValueError("stop must be below entry for a long position")
     max_alloc = _finite_nonnegative(max_allocation_percent, "max_allocation_percent")
+    if risk_pct > 100 or max_alloc > 100:
+        raise ValueError("Risk and allocation percentages cannot exceed 100")
     fee = _finite_nonnegative(fee_percent, "fee_percent")
     slippage = _finite_nonnegative(slippage_percent, "slippage_percent")
+    if fee + slippage >= 100:
+        raise ValueError("Combined cost percentage must be below 100")
+    if type(lot_size) is not int or lot_size < 1:
+        raise ValueError("lot_size must be a positive integer")
 
     risk_budget = equity * risk_pct / 100.0
     cost_rate = (fee + slippage) / 100.0
@@ -79,7 +90,10 @@ def position_size(
     risk_per_unit = stop_distance + entry_price * cost_rate
     units_by_risk = risk_budget / risk_per_unit
     units_by_allocation = equity * max_alloc / 100.0 / entry_price
-    units = max(0.0, min(units_by_risk, units_by_allocation))
+    raw_units = min(units_by_risk, units_by_allocation)
+    if not math.isfinite(raw_units):
+        raise ValueError("Position size exceeds finite numeric range")
+    units = math.floor(max(0.0, raw_units) / lot_size) * lot_size
     notional = units * entry_price
     expected_loss = units * risk_per_unit
     result: dict[str, Any] = {
@@ -91,6 +105,9 @@ def position_size(
         "stop_distance": round(stop_distance, 8),
         "risk_per_unit": round(risk_per_unit, 8),
         "units": round(units, 8),
+        "lot_size": lot_size,
+        "executable_size": units > 0,
+        "stop_fill_guaranteed": False,
         "notional": round(notional, 8),
         "allocation_percent": round(notional / equity * 100.0, 8),
         "estimated_max_loss": round(expected_loss, 8),
@@ -110,6 +127,32 @@ def position_size(
             "estimated_gross_reward": round(units * reward, 8),
         })
     return result
+
+
+def bar_exit(open_price: float, high: float, low: float, close: float,
+             stop: float, target: float, *, time_due: bool = False,
+             allow_gap: bool = True) -> tuple[float, str] | None:
+    """Conservative OHLC reference for research; never proof of an actual fill."""
+    for key, value in (("open", open_price), ("high", high), ("low", low),
+                       ("close", close), ("stop", stop), ("target", target)):
+        _finite_positive(value, key)
+    if not low <= min(open_price, close) <= max(open_price, close) <= high or stop >= target:
+        raise ValueError("Invalid exit bar or stop/target geometry")
+    hit_stop, hit_target = low <= stop, high >= target
+    if allow_gap and hit_stop and open_price <= stop:
+        return open_price, "gap_through_stop"
+    if allow_gap and open_price >= target:
+        # A target established before this session was already reached at the
+        # open.  A later low cannot precede that observation.  Keep the target
+        # reference (no optimistic improvement or assumed executable fill).
+        return target, "take_profit"
+    if hit_stop and hit_target:
+        return stop, "ambiguous_bar_stop_first"
+    if hit_stop:
+        return stop, "stop_loss"
+    if hit_target:
+        return target, "take_profit"
+    return (close, "time_exit") if time_due else None
 
 
 def portfolio_summary(positions: Iterable[Mapping[str, Any]]) -> dict[str, Any]:

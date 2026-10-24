@@ -17,6 +17,7 @@ def _bullish():
         "flow": {"observed_client_type": {"status": "SUCCESS", "signal": "BULLISH"},
                  "price_volume_proxy": {"signal": "BULLISH", "volume_ratio_20": 1.5}, "conflicts": []},
         "setup": {"state": "CONFIRMED", "confirmed_plan": {"entry": 100},
+                  "as_of": "2026-09-28", "expires_on": "2026-10-05", "net_reward_risk_1": 2.1,
                   "reward_risk_1": 2.5, "risk": "LOW", "liquidity": "VERIFIED",
                   "gap_execution_risk": "VERIFIED"},
         "backtest": {"audit": {"validation_passed": True, "frozen_test_passed": True}},
@@ -75,3 +76,10 @@ def test_current_quality_changes_are_versioned_and_other_entry_gates_still_apply
     assert decide(summary)["state"] != "BUY"
     summary["quality_gate"]["current_window"]["status"] = "DEGRADED"
     assert decide(summary)["gates"]["data_quality"] is False
+
+
+def test_volume_policy_is_shared_without_changing_old_replay():
+    summary = _bullish()
+    summary["configuration"] = {"trade_policy": {"volume_confirmation": 2.0}}
+    assert decide(summary)["gates"]["volume_confirmation"] is False
+    assert decide(summary, version="DECISION-1.3")["gates"]["volume_confirmation"] is True

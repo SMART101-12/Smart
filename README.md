@@ -1,9 +1,15 @@
 # SMART
 
-Excel-first, modular, adaptive decision-support system for the Iran capital market.
+Auditable technical and fundamental decision-support system for the Iran capital market.
 
 ## Current stage
-**Sprint 2 — Full technical dashboard, strategy lab and ChatGPT explanation**
+The primary application workflow is `smart.unified_analysis`: verified market
+and Codal evidence, quality gates, technical/fundamental analysis, historical
+evaluation, risk and immutable reports. Existing research engines remain available.
+
+The current ordered development plan and acceptance criteria are in
+[`docs/DEVELOPMENT_PATH.md`](docs/DEVELOPMENT_PATH.md) (2026-10-04).
+Earlier sprint documents below are historical references, not the current backlog.
 
 The repository also includes a resumable data/archive/analysis/learning path:
 

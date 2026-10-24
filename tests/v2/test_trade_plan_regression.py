@@ -21,7 +21,9 @@ def test_breakout_requires_structure_atr_and_volume() -> None:
     assert result.status == "ready" and result.plan
     p = result.plan
     assert p.sl < p.entry_zone[0] <= p.entry_zone[1] < p.tp1 < p.tp2
-    assert (p.tp1 - p.entry_zone[1]) / (p.entry_zone[1] - p.sl) == pytest.approx(2)
+    cost = p.entry_zone[1] * .0035
+    assert (p.tp1 - p.entry_zone[1] - cost) / (p.entry_zone[1] - p.sl + cost) == pytest.approx(2)
+    assert p.net_risk_reward == pytest.approx((2, 3))
     assert result == engine.generate(list(reversed(bars())), "TEST")
     rows = bars()
     rows[-1]["volume"] = 100

@@ -1,6 +1,6 @@
 ﻿"""Responsive Persian analysis dashboard."""
 HTML = '''<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SMART | داشبورد تحلیل</title><link rel="stylesheet" href="/dashboard.css"></head><body>
-<header><a class="brand" href="/">SMART <small>دستیار تحلیل بازار</small></a><a href="/legacy">ابزارهای پیشرفته ↗</a></header><main>
+<header><a class="brand" href="/">SMART <small>دستیار تحلیل بازار</small></a><a href="/financial-reports">گزارش‌های کدال</a><a href="/positions">پیگیری ورود و خروج</a><a href="/legacy">ابزارهای پیشرفته ↗</a></header><main>
 <div class="intro"><span>دید روشن‌تر به بازار</span><h1>تحلیل سهم، در یک نگاه</h1><p>روند قیمت، شواهد تحلیل و سطوح معامله را کنار هم ببینید.</p></div>
 <section class="search"><label for="symbol">نماد مورد نظر</label><div class="search-row"><input id="symbol" placeholder="مثلاً فولاد یا پالایش" autocomplete="off" maxlength="60"><button id="analyze">تحلیل سهم</button><button id="load-latest" class="secondary">آخرین گزارش</button></div></section>
 <section class="progress"><div id="status" role="status" aria-live="polite">نماد را وارد کنید یا آخرین گزارش را بخوانید.</div><button id="resume-job" class="secondary" hidden>ادامه پیگیری تحلیل</button><details><summary>مراحل پردازش</summary><ol id="stages"></ol></details></section>

@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from math import isfinite
 from typing import Any
+from .archive import parse_market_date
 
-VERSION = "DECISION-1.2"
-SUPPORTED_VERSIONS = {"DECISION-1.1", VERSION}
+VERSION = "DECISION-1.4"
+SUPPORTED_VERSIONS = {"DECISION-1.1", "DECISION-1.2", "DECISION-1.3", VERSION}
 WEIGHTS = {"market": 10, "industry": 10, "technical": 25,
            "fundamental": 15, "volume": 10, "money_flow": 15, "risk_reward": 15}
 
@@ -29,7 +30,7 @@ def decide(summary: dict[str, Any], *, weights: dict[str, int] | None = None,
     gate = summary.get("quality_gate") or {}
     financial_gate = summary.get("fundamental_quality_gate") or {}
     current_quality = ((gate.get("current_window") or {}).get("status", gate.get("status"))
-                       if version == VERSION else gate.get("status"))
+                       if version != "DECISION-1.1" else gate.get("status"))
     observed_flow = flow.get("observed_client_type") or {}
     volume_proxy = flow.get("price_volume_proxy") or {}
     directional = {"BULL": 80., "BEAR": 20., "RISK_OFF": 0., "SIDEWAYS": 50., "NEUTRAL": 50.}
@@ -70,9 +71,26 @@ def decide(summary: dict[str, Any], *, weights: dict[str, int] | None = None,
                             and setup.get("liquidity") == "VERIFIED" and setup.get("gap_execution_risk") == "VERIFIED",
         "complete_evidence": complete,
     }
+    if version in {"DECISION-1.3", VERSION}:
+        policy = (summary.get("configuration") or {}).get("trade_policy") or {}
+        net_rr = _number(setup.get("net_reward_risk_1"))
+        cutoff = parse_market_date(gate.get("as_of") or gate.get("latest_valid_date"))
+        expiry = parse_market_date(setup.get("expires_on"))
+        source_day = parse_market_date(setup.get("as_of"))
+        mandatory["entry_validity"] = bool(cutoff and expiry and source_day and source_day <= cutoff <= expiry)
+        mandatory["net_reward_risk"] = net_rr is not None and net_rr >= policy.get("min_net_reward_risk", 2.0)
+        if version == VERSION:
+            mandatory["volume_confirmation"] = (
+                _number(volume_proxy.get("volume_ratio_20")) is not None
+                and volume_proxy["volume_ratio_20"] >= policy.get("volume_confirmation", 1.2))
+            mandatory["risk_constraints"] = (
+                setup.get("risk") in {"LOW", "MEDIUM"} and mandatory["net_reward_risk"]
+                and setup.get("liquidity") == "VERIFIED" and setup.get("gap_execution_risk") == "VERIFIED")
     failed = [k for k, passed in mandatory.items() if not passed]
     if setup.get("state") == "INVALIDATED":
         state = "INVALIDATED"
+    elif version in {"DECISION-1.3", VERSION} and setup.get("state") == "EXPIRED":
+        state = "EXPIRED"
     elif setup.get("state") == "NO_SETUP":
         state = "NO_SETUP"
     elif market.get("regime") in {"RISK_OFF", "BEAR"} or setup.get("risk") == "EXTREME":

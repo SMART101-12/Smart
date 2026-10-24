@@ -12,18 +12,30 @@ import contextlib
 from threading import RLock
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable
 from urllib.parse import quote
 
 from .archive import safe_symbol, deduplicate_rows
 from zoneinfo import ZoneInfo
 
-VERSION = "SMART-ANALYSIS-2.3"
+VERSION = "SMART-ANALYSIS-2.7"
 ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 JOB_TIMEOUT_SECONDS = 1200
 STAGE_TIMEOUT_SECONDS = 180
 _job_lock = RLock()
 _active_jobs: set[str] = set()
+
+
+def _stage_status(value: Any) -> str:
+    """Execution success does not imply that the returned evidence is complete."""
+    if value is None:
+        return "NOT_AVAILABLE"
+    if not isinstance(value, dict) or "status" not in value:
+        return "COMPLETED"
+    status = str(value["status"]).strip().upper()
+    if status in {"SUCCESS", "COMPLETE", "COMPLETED", "VERIFIED", "PASS", "OK", "READY", "AVAILABLE", "ANALYZED", "NO_SETUP"}:
+        return "COMPLETED"
+    return "PARTIAL"
 
 
 def _process_alive(pid: int | None) -> bool:
@@ -212,6 +224,7 @@ async def _run_job(job: dict[str, Any]) -> None:
     from .financial_scoring import FinancialScoringEngine
     from .fund_financial import fund_financial_evidence, fund_valuation, is_fund_instrument
     from .conditional_levels import conditional_levels
+    from smart_v2.analysis.trade_policy import TradePolicy
     from .analysis_layers import from_legacy_summary
     from .data_quality_gate import financial_gate, market_gate
     from .market_models import analyze_market_models
@@ -240,14 +253,18 @@ async def _run_job(job: dict[str, Any]) -> None:
     _write(directory / "job.json", job)
     started = time.monotonic()
 
-    async def stage(name, action):
+    async def stage(name: str, action: Callable[[], Awaitable[Any]]) -> Any:
         start = time.monotonic()
         job["stage"] = name
         _write(directory / "job.json", job)
         try:
             value = await asyncio.wait_for(action(), timeout=STAGE_TIMEOUT_SECONDS)
-            reported = value.get("status") if isinstance(value, dict) else None
-            state = "PARTIAL" if reported in {"PARTIAL", "RATE_LIMITED", "SOURCE_UNAVAILABLE", "INSUFFICIENT_HISTORY", "INSUFFICIENT_DATA", "DEGRADED", "INVALID", "UNAVAILABLE", "NOT_AVAILABLE", "CONFLICTING", "unavailable"} else "COMPLETED"
+            state = _stage_status(value)
+            if state != "COMPLETED":
+                detail = "No stage result"
+                if isinstance(value, dict):
+                    detail = value.get("reason") or value.get("error") or value.get("status")
+                job["warnings"].append({"stage": name, "error": str(detail)})
         except Exception as exc:
             value = None
             state = "NOT_AVAILABLE"
@@ -261,7 +278,7 @@ async def _run_job(job: dict[str, Any]) -> None:
                                   "source": "TSETMC" if name in {"symbol", "market_and_technical", "historical_data"}
                                             else "KODAL" if name in {"codal_sync", "fundamental"}
                                             else "local", "status": state,
-                                  "error": job["warnings"][-1]["error"] if state == "NOT_AVAILABLE" else None},
+                                  "error": job["warnings"][-1]["error"] if state != "COMPLETED" else None},
                                  ensure_ascii=False) + "\n")
         _write(directory / "job.json", job)
         return value
@@ -352,7 +369,8 @@ async def _run_job(job: dict[str, Any]) -> None:
     async def financial_sync():
         from .codal import HistoricalDataSyncManager
         repository = HistoricalDataRepository()
-        return await asyncio.to_thread(HistoricalDataSyncManager(repository).sync_financial, symbol)
+        manager = HistoricalDataSyncManager(repository)
+        return await asyncio.to_thread(manager.sync_financial if is_fund else manager.sync_company, symbol)
 
     sync = await stage("codal_sync", financial_sync)
     if sync and sync.get("status") in {"PARTIAL", "SOURCE_UNAVAILABLE"}:
@@ -366,6 +384,11 @@ async def _run_job(job: dict[str, Any]) -> None:
     fundamental_quality = await stage("fundamental_quality_gate", verify_financial_source)
     fundamental = None if fundamental_quality and fundamental_quality["status"] == "INVALID" else await stage(
         "fundamental", financial)
+    if fundamental and not is_fund:
+        from .company_financials import company_dataset
+        fundamental["company_reports"] = await asyncio.to_thread(
+            company_dataset, HistoricalDataRepository(), symbol,
+            as_of=date.fromisoformat(quality_gate["as_of"]))
     if is_fund and fundamental:
         last_bar = analysis_history[-1] if analysis_history else {}
         valuation = fund_valuation(fundamental.get("net_asset_value_per_unit"),
@@ -397,11 +420,12 @@ async def _run_job(job: dict[str, Any]) -> None:
         if not analysis_history:
             raise ValueError("no historical bars")
         metadata = {"source": "TSETMC", "ins_code": ins_code}
+        cost_pct = sum(configuration["trade_policy"][k] for k in ("round_trip_cost_pct", "slippage_pct"))
         value, cache = await cached_research("long_only_oos", {
             "symbol": symbol, "history": analysis_history, "engine_version": VERSION,
-            "configuration": configuration, "transaction_cost_pct": 0.35, "source_metadata": metadata},
+            "configuration": configuration, "transaction_cost_pct": cost_pct, "source_metadata": metadata},
             lambda: asyncio.to_thread(build_symbol_profile, analysis_history, symbol=symbol,
-                                      transaction_cost_pct=0.35, persist=False, source_metadata=metadata))
+                                      transaction_cost_pct=cost_pct, persist=False, source_metadata=metadata))
         research_cache["long_only_oos"] = cache
         return value
 
@@ -428,9 +452,16 @@ async def _run_job(job: dict[str, Any]) -> None:
             raise ValueError("no historical bars")
         recent = [asdict(bar) for bar in bars_from_rows(analysis_history)[-60:]]
         return await asyncio.to_thread(conditional_levels, recent, symbol,
-                                       model_decision=(self_test or {}).get("decision"))
+                                       model_decision=(self_test or {}).get("decision"),
+                                       policy=TradePolicy(**configuration["trade_policy"]))
 
     levels = await stage("entry_exit", entry_exit)
+    async def entry_engine_replay():
+        from .entry_replay import replay_entry_plans
+        return await asyncio.to_thread(replay_entry_plans, analysis_history[-300:], symbol=symbol,
+                                       policy=TradePolicy(**configuration["trade_policy"]))
+
+    entry_replay = await stage("entry_engine_replay", entry_engine_replay)
     async def ten_models():
         return await asyncio.to_thread(analyze_market_models, analysis_history, symbol=symbol)
 
@@ -450,6 +481,7 @@ async def _run_job(job: dict[str, Any]) -> None:
         market=(regime or {}).get("market"), industry=(regime or {}).get("industry"),
         flow=flow_analysis, technical=structure,
         model_decision=(self_test or {}).get("decision"),
+        policy=TradePolicy(**configuration["trade_policy"]),
         last_close=(structure or {}).get("timeframes", {}).get("daily", {}).get("last_close")))
     structured = (row or {}).get("structured_analysis") or {}
     quality = structured.get("data_quality", {"status": "poor", "issues": ["market_unavailable"]})
@@ -501,7 +533,9 @@ async def _run_job(job: dict[str, Any]) -> None:
                              if key not in {"final_assessment", "scenarios"}} if row else None,
         "smart_money": (row or {}).get("smart_money"),
         "fundamental": fundamental,
+        "codal_sync": sync,
         "backtest": {"directional_exam": backtest, "long_only": model_backtest,
+                     "entry_engine_replay": entry_replay,
                      "audit": backtest_audit},
         "prediction": (profile or {}).get("current_entry") if profile and profile.get("status") == "COMPLETE" else None,
         "entry_exit": levels,
@@ -511,6 +545,10 @@ async def _run_job(job: dict[str, Any]) -> None:
         "setup": setup_state,
         "self_test": self_test,
         "risk": {"level": (setup_state or {}).get("risk"),
+                 "exit_rules": TradePolicy(**configuration["trade_policy"]).exit_rules(),
+                 "net_reward_risk_1": (setup_state or {}).get("net_reward_risk_1"),
+                 "cost_assumptions": configuration["trade_policy"],
+                 "position_size": None, "position_size_status": "account_equity_and_actual_entry_required",
                  "stop_distance_pct": (setup_state or {}).get("risk_pct"),
                  "reward_risk_1": (setup_state or {}).get("reward_risk_1"),
                  "liquidity": (setup_state or {}).get("liquidity"),
@@ -558,6 +596,7 @@ async def _run_job(job: dict[str, Any]) -> None:
                "technical": summary["technical"], "fundamental": fundamental,
                "backtest_status": (backtest or {}).get("status"),
                "backtest_audit": backtest_audit,
+               "entry_engine_replay": entry_replay,
                "long_only_oos": {"metrics": (model_backtest or {}).get("metrics"),
                                  "baseline": (model_backtest or {}).get("baseline")},
                "self_test": self_test,

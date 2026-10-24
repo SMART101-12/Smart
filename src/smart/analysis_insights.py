@@ -15,6 +15,13 @@ def explain_gates(summary: dict[str, Any]) -> list[dict[str, Any]]:
     if decision.get("version") == "DECISION-1.1":
         current = gate.get("status")
     specifications = {
+        "entry_validity": ("اعتبار زمانی ورود", "DATA", {"as_of": setup.get("as_of"),
+                            "expires_on": setup.get("expires_on"), "state": setup.get("state")},
+                           "تاریخ ارزیابی داخل مهلت ورود باشد و قیمت از محدوده ورود عبور نکرده باشد.",
+                           "برای فرصت منقضی‌شده، تحلیل جدید لازم است؛ قیمت را تعقیب نکنید."),
+        "net_reward_risk": ("بازده به ریسک پس از هزینه", "DATA", setup.get("net_reward_risk_1"),
+                            "نسبت خالص باید به حداقل سیاست ثبت‌شده تحلیل برسد.",
+                            "هزینه، لغزش، حد ضرر و مقاومت پیش رو بررسی شوند؛ هدف صرفاً برای قبولی بزرگ نشود."),
         "data_quality": ("کیفیت داده", "DATA", {"status": current, "latest": gate.get("latest_valid_date"),
                           "freshness": gate.get("freshness"), "blockers": gate.get("blockers")},
                          "پنجره مورد استفاده سالم، کندل آخر معتبر و داده تازه باشد.",

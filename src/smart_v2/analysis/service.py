@@ -6,14 +6,16 @@ from .gold_fund import GoldFundAnalyzer
 from .multi_factor_engine import MultiFactorEngine
 from .stock_service import StockAnalysisService
 from .trade_plan import EntryExitEngine
+from .trade_policy import TradePolicy
 from .output_formatter import AnalysisOutputFormatter
 
 
 class AnalysisService:
     """Analysis boundary. Consumes processed datasets and AI outputs only."""
 
-    def trade_plan(self, records: list[dict[str, Any]], symbol: str, tf: str = "1d") -> dict[str, Any]:
-        return EntryExitEngine().generate(records, symbol, tf).as_dict()
+    def trade_plan(self, records: list[dict[str, Any]], symbol: str, tf: str = "1d",
+                   *, policy: TradePolicy | None = None) -> dict[str, Any]:
+        return EntryExitEngine(policy).generate(records, symbol, tf).as_dict()
 
     def report(self, records: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
         return AnalysisOutputFormatter().format(self.analyze_stock(records, **kwargs))

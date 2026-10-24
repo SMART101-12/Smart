@@ -42,21 +42,34 @@ ALIASES.update({
     "سود(زیان) ناخالص": "gross_profit", "سود(زیان) عملیاتی": "operating_profit",
     "سود(زیان) خالص": "net_profit", "سود (زیان) خالص هر سهم– ریال": "eps",
     "سرمایه - میلیون ریال": "capital",
+    "سود (زیان) خالص هر سهم – ریال": "eps",
+    "هزینه های فروش، اداری و عمومی": "selling_expenses",
+    "جریان خالص ورود (خروج) نقد حاصل از فعالیت های سرمایه گذاری": "investing_cash_flow",
+    "جریان خالص ورود (خروج) نقد حاصل از فعالیت های تامین مالی": "financing_cash_flow",
+    "خالص افزایش (کاهش) در موجودی نقد": "cash_change",
 })
 
 
-def metric_label(value):
-    return normalize(value).replace("ى", "ی").replace("\u200f", "").replace("\u200e", "")
+def metric_label(value: object) -> str:
+    return normalize(str(value).replace("ى", "ی").replace("\u200f", "").replace("\u200e", "").replace("\u00ad", ""))
 
 
 ALIASES = {metric_label(k): v for k, v in ALIASES.items()}
-PARSER_VERSION = "CODAL-PARSER-2"
+PARSER_VERSION = "CODAL-PARSER-4"
+
+
+class CodalChallengeError(ValueError):
+    """An HTTP 200 verification page is not a financial document."""
+
+
+def is_verification_page(raw: str) -> bool:
+    return bool(re.search(r'id=["\']captcha(?:Code|Image)["\']', raw, re.I))
 
 
 def statement_links(raw, url, consolidated=True):
     """Use sheet IDs actually advertised in the report, not guessed IDs."""
     from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
-    select = re.search(r'<select[^>]+id=["\']ddlTable["\'][^>]*>(.*?)</select>', raw, re.S)
+    select = re.search(r'<select[^>]+id=["\'](?:ctl00_)?ddlTable["\'][^>]*>(.*?)</select>', raw, re.S | re.I)
     if not select:
         return []
     links = []
@@ -287,6 +300,7 @@ def parse_document(letter, raw, symbol, url):
         cell.update(normalized_value=cell["value"] * factor if cell["value"] is not None else None,
                     normalized_unit="IRR" if factor != 1 else cell["unit"], normalization_factor=factor)
     return {"symbol": normalize(symbol), "source": "KODAL", "source_url": url,
+            "parser_version": PARSER_VERSION,
             "source_title": title,
             "company": letter.get("CompanyName"), "fiscal_year_end": fiscal_year_end,
             "source_date": normalize(letter["PublishDateTime"]),
@@ -300,9 +314,12 @@ def parse_document(letter, raw, symbol, url):
 class CodalHistoricalProvider:
     search_url = "https://search.codal.ir/api/search/v2/q"
 
-    def __init__(self, client=None, repository=None):
+    def __init__(self, client=None, repository=None, fallback_client: httpx.Client | None = None):
         self.client = client
         self.repository = repository
+        self.fallback_client = fallback_client
+        self.challenge_url: str | None = None
+        self.challenge_supported = False
         self.deadline = time.monotonic() + 120
 
     def get(self, url, *, params=None):
@@ -344,19 +361,29 @@ class CodalHistoricalProvider:
                                 "retry_at": (datetime.now(timezone.utc) + timedelta(seconds=seconds)).isoformat(),
                                 "retry_after_seconds": seconds})
                     response.raise_for_status()
+                    if is_verification_page(response.text):
+                        self.challenge_url = str(response.url)
+                        self.challenge_supported = all(path in response.text for path in (
+                            "/ReportsCaptcha.aspx/GetCaptchaImage", "/ReportsCaptcha.aspx/VerifyCaptcha"))
+                        raise CodalChallengeError("USER_ACTION_REQUIRED: Codal returned a verification page, not report data")
                     return response
                 raise ValueError("Too many report redirects")
             except (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError):
                 if attempt == 2:
                     raise
+                if self.fallback_client is not None:
+                    self.client = self.fallback_client
             except httpx.HTTPStatusError as exc:
                 if attempt == 2 or exc.response.status_code < 500:
                     raise
+            time.sleep(min(0.25 * 2 ** attempt, max(0, self.deadline - time.monotonic())))
 
     def download(self, symbol, docid, url, refresh=False):
         cached = self.repository.asset(symbol, docid, url) if self.repository and not refresh else None
         if cached:
-            return cached["payload"].decode("utf-8-sig", errors="strict")
+            raw = cached["payload"].decode("utf-8-sig", errors="strict")
+            if not is_verification_page(raw):
+                return raw
         response = self.get(url)
         raw = response.content.decode("utf-8-sig", errors="strict")
         if self.repository:
@@ -400,9 +427,11 @@ class CodalHistoricalProvider:
         """
         self.deadline = time.monotonic() + 120
         if self.client is None:
-            with httpx.Client(timeout=20, follow_redirects=False,
-                              headers={"User-Agent": "SMART/1.0"}) as client:
-                return CodalHistoricalProvider(client, self.repository).fetch(symbol, known_ids, publication_cursor, years)
+            with httpx.Client(timeout=12, follow_redirects=False,
+                              headers={"User-Agent": "Mozilla/5.0 SMART"}) as client, \
+                    httpx.Client(timeout=12, trust_env=False, follow_redirects=False,
+                                 headers={"User-Agent": "Mozilla/5.0 SMART"}) as direct:
+                return CodalHistoricalProvider(client, self.repository, direct).fetch(symbol, known_ids, publication_cursor, years)
         output, rejected, periods, excluded = [], [], set(), []
         existing = self.repository.reports(symbol) if self.repository else []
         latest_year = max((int(r["period"][:4]) for r in existing
@@ -498,19 +527,34 @@ class CodalHistoricalProvider:
         if years < 5 or max_pages < 1 or max_pages > 100:
             raise ValueError("At least five years; pages must be 1..100")
         if self.client is None:
-            with httpx.Client(timeout=12, follow_redirects=False, headers={"User-Agent": "Mozilla/5.0 SMART"}) as client:
-                return CodalHistoricalProvider(client, repo).sync_company(symbol, years=years, max_pages=max_pages, force=force)
+            with httpx.Client(timeout=12, follow_redirects=False, headers={"User-Agent": "Mozilla/5.0 SMART"}) as client, \
+                    httpx.Client(timeout=12, trust_env=False, follow_redirects=False,
+                                 headers={"User-Agent": "Mozilla/5.0 SMART"}) as direct:
+                return CodalHistoricalProvider(client, repo, direct).sync_company(symbol, years=years, max_pages=max_pages, force=force)
         state = repo.state(symbol, "KODAL_COMPANY")
-        if not force and repo.fresh(symbol, "KODAL_COMPANY", settings()["sync_ttl_seconds"]):
+        if not force and state.get("action_required") == "CODAL_USER_VERIFICATION":
             return dict(state, reused_local=True)
-        cursor = state.get("cursor") if state.get("status") == "SUCCESS" else None
+        if (not force and state.get("parser_version") == PARSER_VERSION
+                and state.get("status") == "SUCCESS"
+                and repo.fresh(symbol, "KODAL_COMPANY", settings()["sync_ttl_seconds"])):
+            return dict(state, reused_local=True)
+        current_parser = state.get("parser_version") == PARSER_VERSION
+        cursor = state.get("cursor") if current_parser and state.get("status") == "SUCCESS" else None
         result = {"symbol": normalize(symbol), "source": "KODAL", "status": "SUCCESS",
+                  "parser_version": PARSER_VERSION,
                   "inserted": 0, "updated": 0, "skipped": 0, "discovered": 0,
                   "rejected": [], "pages": [], "cursor": cursor,
                   "last_sync_date": state.get("last_sync_date")}
         known = repo.known_documents(symbol) | {r["report_id"] for r in repo.monthly_sales(symbol, selected=False)}
+        pending_changed = set(state.get("pending_changed", []))
+        if not current_parser:
+            known = set()
         newest = cursor
-        for category in (1, 3):
+        started = time.monotonic()
+        verification_required = False
+        for category_index, category in enumerate((3, 1), start=1):
+            # Reserve time for both report families; one slow family must not starve the other.
+            self.deadline = started + 60 * category_index
             seen, first_year = set(), None
             for page in range(1, max_pages + 1):
                 params = {"Symbol": symbol, "Category": category, "PageNumber": page,
@@ -525,6 +569,7 @@ class CodalHistoricalProvider:
                         raise ValueError("Invalid discovery response")
                 except (httpx.HTTPError, ValueError) as exc:
                     result["rejected"].append({"category": category, "page": page, "error": str(exc)})
+                    verification_required = isinstance(exc, CodalChallengeError)
                     break
                 result["pages"].append({"category": category, "page": page, "count": len(letters)})
                 if not letters:
@@ -536,10 +581,15 @@ class CodalHistoricalProvider:
                 seen.add(fingerprint)
                 page_years = []
                 for letter in letters:
+                    if time.monotonic() >= self.deadline:
+                        result["rejected"].append({"category": category, "page": page,
+                                                   "error": "Acquisition budget reached; resume required"})
+                        break
                     if not issuer_report(letter, symbol):
                         continue
                     title = normalize(letter.get("Title", ""))
-                    financial = "صورت" in title and "مالی" in title
+                    financial = ("صورت" in title and "مالی" in title
+                                 and ("حسابرسی شده" in title or "حسابرسی نشده" in title))
                     monthly = "فعالیت ماهانه" in title
                     if not financial and not monthly:
                         # Preserve discovery metadata for relevant supplemental
@@ -557,6 +607,9 @@ class CodalHistoricalProvider:
                         continue
                     result["discovered"] += 1
                     changed = repo.announcement_changed(symbol, letter)
+                    if changed:
+                        pending_changed.add(docid)
+                    changed = docid in pending_changed
                     publication = normalize(letter.get("PublishDateTime", ""))
                     if publication:
                         newest = max(newest or publication, publication)
@@ -575,8 +628,14 @@ class CodalHistoricalProvider:
                             for report, raw in self.download_statements(letter, symbol, url, changed):
                                 result[repo.save_report(report, raw)] += 1
                         known.add(docid)
+                        pending_changed.discard(docid)
                     except (ValueError, TypeError, KeyError, httpx.HTTPError) as exc:
                         result["rejected"].append({"report_id": docid, "source_url": url, "error": str(exc)})
+                        if isinstance(exc, CodalChallengeError):
+                            verification_required = True
+                            break
+                if verification_required or time.monotonic() >= self.deadline:
+                    break
                 # Keep the entire last fetched page, including older evidence.
                 # Initial window covers five *completed* fiscal years plus current.
                 if not cursor and page_years and first_year and max(page_years) < first_year - years:
@@ -591,13 +650,21 @@ class CodalHistoricalProvider:
                     break
             else:
                 result["rejected"].append({"category": category, "error": "Page budget reached; resume required"})
+            if verification_required:
+                result["action_required"] = "CODAL_USER_VERIFICATION"
+                result["blocked_url"] = self.challenge_url
+                break
+        result["pending_changed"] = sorted(pending_changed)
         result["status"] = "PARTIAL" if result["rejected"] else "SUCCESS"
+        if result["rejected"]:
+            result["error"] = result["rejected"][0]["error"]
         if result["status"] == "SUCCESS":
             result["cursor"], result["last_sync_date"] = newest, now()
         datasets = company_dataset(repo, symbol)
         for name in ("quarterly_financials", "quarterly_sales", "trend_metrics", "seasonality", "data_quality"):
             repo.save_calculated_dataset(symbol, name, datasets[name])
         result["data_quality"] = datasets["data_quality"]
+        repo.record_sync(symbol, "KODAL", result)
         return repo.record_sync(symbol, "KODAL_COMPANY", result)
 
 
@@ -640,6 +707,11 @@ class HistoricalDataSyncManager:
 
     def sync_company(self, symbol, years=5, max_pages=100, force=False):
         with _sync_lock(str(self.repository.path.resolve()), normalize(symbol)):
+            if self.provider.client is None:
+                from .codal_access import access_session
+                with access_session(self.repository, symbol) as access:
+                    assert access is not None
+                    return access.provider.sync_company(symbol, years=years, max_pages=max_pages, force=force)
             return self.provider.sync_company(symbol, years=years, max_pages=max_pages, force=force)
 
     def _sync_financial(self, symbol, force=False):

@@ -1,5 +1,16 @@
 {
-  "version": "ANALYSIS-CONFIG-1",
+  "version": "ANALYSIS-CONFIG-2",
+  "trade_policy": {
+    "volume_confirmation": 1.2,
+    "stop_atr_buffer": 1.0,
+    "min_net_reward_risk": 2.0,
+    "second_net_reward_risk": 3.0,
+    "max_stop_distance_pct": 8.0,
+    "round_trip_cost_pct": 0.35,
+    "slippage_pct": 0.0,
+    "entry_validity_days": 7,
+    "time_exit_sessions": 10
+  },
   "technical_weights": {"structure": 20, "trend": 15, "momentum": 15, "volume_flow": 20, "volatility": 10, "levels": 20},
   "decision_weights": {"market": 10, "industry": 10, "technical": 25, "fundamental": 15, "volume": 10, "money_flow": 15, "risk_reward": 15}
 }

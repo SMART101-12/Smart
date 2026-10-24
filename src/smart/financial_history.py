@@ -112,6 +112,10 @@ class HistoricalDataRepository(SnapshotStore):
                   period TEXT NOT NULL, report_type TEXT NOT NULL, basis TEXT NOT NULL,
                   metric TEXT NOT NULL, value REAL, unit TEXT NOT NULL, locator TEXT NOT NULL,
                   PRIMARY KEY(symbol,document_id,digest,period,report_type,basis,metric));
+                CREATE TABLE IF NOT EXISTS financial_parse_history (
+                  symbol TEXT NOT NULL, document_id TEXT NOT NULL, raw_digest TEXT NOT NULL,
+                  parsed_digest TEXT NOT NULL, archived_at TEXT NOT NULL, report TEXT NOT NULL,
+                  PRIMARY KEY(symbol,document_id,raw_digest,parsed_digest));
                 CREATE TABLE IF NOT EXISTS historical_sync_log (
                   id INTEGER PRIMARY KEY, symbol TEXT NOT NULL, source TEXT NOT NULL,
                   request_date TEXT NOT NULL, payload TEXT NOT NULL);
@@ -281,19 +285,36 @@ class HistoricalDataRepository(SnapshotStore):
                 raise ValueError("Balance sheet consistency failed")
         digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
         key = (symbol, str(report["document_id"]), digest)
+        encoded = json.dumps(report, ensure_ascii=False, allow_nan=False, sort_keys=True)
         with self._connect() as con:
-            if con.execute("SELECT 1 FROM financial_documents WHERE symbol=? AND document_id=? AND digest=?", key).fetchone():
-                return "skipped"
+            con.execute("BEGIN IMMEDIATE")
+            stored = con.execute("SELECT report FROM financial_documents WHERE symbol=? AND document_id=? AND digest=?", key).fetchone()
+            if stored:
+                if json.loads(stored[0]) == report:
+                    return "skipped"
+                # Reprocessing the same immutable raw evidence must retain the prior interpretation.
+                previous_encoded = json.dumps(json.loads(stored[0]), ensure_ascii=False, allow_nan=False, sort_keys=True)
+                con.execute("INSERT OR IGNORE INTO financial_parse_history VALUES(?,?,?,?,?,?)",
+                            (*key, hashlib.sha256(previous_encoded.encode()).hexdigest(), now(), stored[0]))
+                con.execute("UPDATE financial_documents SET report=? WHERE symbol=? AND document_id=? AND digest=?", (encoded, *key))
+                con.execute("DELETE FROM financial_metrics WHERE symbol=? AND document_id=? AND digest=?", key)
             previous = con.execute("SELECT 1 FROM financial_metrics WHERE symbol=? AND period=? AND basis=? AND report_type=?",
                                    (symbol, period, report["basis"], kind)).fetchone()
-            con.execute("INSERT INTO financial_documents VALUES(?,?,?,?,?,?,?,?)",
-                        (*key, report["source_url"], report["source_date"], now(), raw,
-                         json.dumps(report, ensure_ascii=False, allow_nan=False)))
+            if not stored:
+                con.execute("INSERT INTO financial_documents VALUES(?,?,?,?,?,?,?,?)",
+                            (*key, report["source_url"], report["source_date"], now(), raw, encoded))
             for metric, value in values.items():
                 item = report["metrics"][metric]
                 con.execute("INSERT INTO financial_metrics VALUES(?,?,?,?,?,?,?,?,?,?)",
                             (*key, period, kind, report["basis"], metric, value, item["unit"], item["locator"]))
-        return "updated" if previous else "inserted"
+        return "updated" if stored or previous else "inserted"
+
+    def report_parse_history(self, symbol: str) -> list[dict]:
+        """Prior parser interpretations, separate from issuer report revisions."""
+        with self._connect() as con:
+            rows = con.execute("SELECT document_id,raw_digest,parsed_digest,archived_at,report FROM financial_parse_history WHERE symbol=? ORDER BY archived_at,document_id", (normalize(symbol),)).fetchall()
+        return [{"document_id": r[0], "raw_digest": r[1], "parsed_digest": r[2],
+                 "archived_at": r[3], "report": json.loads(r[4])} for r in rows]
 
     def reports(self, symbol, basis="standalone", selected=True):
         with self._connect() as con:

@@ -202,8 +202,11 @@ class StockAnalysisService:
         latest = canonical[-1]
         atr_value = self._atr(frame)
         from smart.conditional_levels import conditional_levels
-        entry_exit = EntryExitEngine().generate(canonical[-60:], symbol)
-        conditional = conditional_levels(canonical[-60:], symbol, model_decision=None)
+        from smart.analysis_settings import load_analysis_configuration
+        from .trade_policy import TradePolicy
+        policy = TradePolicy(**load_analysis_configuration()["trade_policy"])
+        entry_exit = EntryExitEngine(policy).generate(canonical[-60:], symbol)
+        conditional = conditional_levels(canonical[-60:], symbol, model_decision=None, policy=policy)
         if not audit["latest_bar_verified"]:
             from .trade_plan import TradePlanResult
             entry_exit = TradePlanResult("insufficient_data", "Latest source bar has no verified OHLCV")

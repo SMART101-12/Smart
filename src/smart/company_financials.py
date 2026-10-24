@@ -8,10 +8,16 @@ import hashlib
 import json
 import math
 from collections import defaultdict
+from datetime import date
 from pathlib import Path
 from statistics import mean
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .financial_history import HistoricalDataRepository
 
 from .financial_history import METRICS, normalize, now
+from .fiscal_calendar import comparable_fiscal_year_ends
 
 
 FLOW_METRICS = ("revenue", "gross_profit", "operating_profit", "net_profit",
@@ -115,22 +121,23 @@ def monthly_quarters(monthly):
     return output
 
 
-def quarterly_trends(rows):
-    output = []
-    lookup = {}
+def quarterly_trends(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    lookup: dict[tuple[str, int, int], list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         year = int(row["fiscal_year_end"][:4])
-        key = (row["basis"], row["fiscal_year_end"][5:], year, row["quarter"])
-        lookup[key] = row
+        key = (row["basis"], year, row["quarter"])
+        lookup[key].append(row)
     for row in rows:
         year = int(row["fiscal_year_end"][:4])
         q = row["quarter"]
-        base = (row["basis"], row["fiscal_year_end"][5:])
         result = {"fiscal_year_end": row["fiscal_year_end"], "quarter": q, "basis": row["basis"], "metrics": {}}
         for metric in ("revenue", "net_profit", "eps"):
             cell = row["metrics"][metric]
             for label, prev_year, prev_q in (("yoy", year - 1, q), ("qoq", year if q > 1 else year - 1, q - 1 if q > 1 else 4)):
-                prior = lookup.get((*base, prev_year, prev_q), {}).get("metrics", {}).get(metric)
+                candidates = [candidate for candidate in lookup.get((row["basis"], prev_year, prev_q), [])
+                              if comparable_fiscal_year_ends((row["fiscal_year_end"], candidate["fiscal_year_end"]))]
+                prior = candidates[0]["metrics"].get(metric) if len(candidates) == 1 else None
                 valid = prior and cell["value"] is not None and prior["value"] is not None and prior["value"] > 0 and cell["unit"] == prior["unit"]
                 value = (cell["value"] / prior["value"] - 1) if valid else None
                 result["metrics"][metric + "_" + label] = fact(value, "ratio", "current / previous - 1",
@@ -163,16 +170,29 @@ def seasonality(quarters):
     return output
 
 
-def company_dataset(repo, symbol):
-    reports = [r for basis in ("standalone", "consolidated") for r in repo.reports(symbol, basis)]
+def company_dataset(repo: HistoricalDataRepository, symbol: str, *, as_of: date | None = None) -> dict[str, Any]:
+    from .data_quality_gate import source_date_cutoff
+    versions = [r for basis in ("standalone", "consolidated")
+                for r in repo.reports(symbol, basis, selected=False)
+                if as_of is None or source_date_cutoff(r["source_date"], as_of=as_of)]
+    chosen = {}
+    for report in sorted(versions, key=lambda r: (r["audited"], r["source_date"], r["restated"], r["retrieved_at"])):
+        chosen[(report["basis"], report["period"], report["report_type"])] = report
+    reports = sorted(chosen.values(), key=lambda r: (r["period"], r["basis"]))
     quarterly, issues = quarterly_financials(reports)
-    monthly = repo.monthly_sales(symbol)
+    monthly_versions = [r for r in repo.monthly_sales(symbol, selected=False)
+                        if as_of is None or source_date_cutoff(r["publish_date"], as_of=as_of)]
+    selected_months = {}
+    for report in monthly_versions:
+        selected_months[report["period"][:7]] = report
+    monthly = sorted(selected_months.values(), key=lambda r: r["period"])
     sales = monthly_quarters(monthly)
-    versions = [r for basis in ("standalone", "consolidated") for r in repo.reports(symbol, basis, selected=False)]
     report_ids = {r["document_id"] for r in versions} | {r["report_id"] for r in monthly}
     data = {"symbol": normalize(symbol), "source": "KODAL", "generated_at": now(),
             "financial_data": reports, "quarterly_financials": quarterly, "quarterly_sales": sales,
-            "monthly_sales": monthly, "product_sales": repo.product_sales(symbol),
+            "as_of": as_of.isoformat() if as_of else None,
+            "monthly_sales": monthly, "product_sales": [dict(p, report_id=r["report_id"],
+                publish_date=r["publish_date"], digest=r["digest"]) for r in monthly for p in r["products"]],
             "trend_metrics": quarterly_trends(quarterly), "seasonality": seasonality(sales),
             "issues": issues, "data_quality": {
                 "financial_years_available": len({r["period"][:4] for r in reports if r["months"] == 12}),

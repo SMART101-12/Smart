@@ -22,7 +22,7 @@ import math
 import uuid
 from collections import Counter
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from statistics import mean
 from typing import Any, Iterable, Sequence
@@ -34,7 +34,7 @@ from .technical_analysis import Bar
 FOCUS_SYMBOLS = ("فولاد", "پالایش", "فملی", "فجر")
 TIMEFRAMES = ("daily", "weekly", "monthly", "yearly")
 INDICATORS = ("ichimoku", "macd", "rsi", "ema", "sma")
-ENGINE_VERSION = "symbol-adaptive-entry-v2"
+ENGINE_VERSION = "symbol-adaptive-entry-v3"
 
 # A candidate needs enough independent, after-cost evidence before it can be
 # treated as a research hypothesis or a paper-monitoring candidate.
@@ -184,8 +184,9 @@ def _limit_to_years(bars: Sequence[Bar], years: int) -> list[Bar]:
 
 def _bucket_key(value: date, timeframe: str) -> tuple[int, ...]:
     if timeframe == "weekly":
-        year, week, _ = value.isocalendar()
-        return year, week
+        # The Tehran trading week begins Saturday, matching price structure.
+        start = value - timedelta(days=(value.weekday() - 5) % 7)
+        return start.year, start.month, start.day
     if timeframe == "monthly":
         return value.year, value.month
     if timeframe == "yearly":
@@ -684,7 +685,9 @@ def _open_trade(
         "entry_index": entry_index,
         "entry_date": bars[entry_index].date,
         "entry_price": _round(entry_price),
-        "planned_exit_index": min(len(bars) - 1, entry_index + max(1, config.holding_bars) - 1),
+        # Dataset exhaustion is not an exit event.  An unresolved tail position
+        # must remain open until its actual stop, target or holding period ends.
+        "planned_exit_index": entry_index + max(1, config.holding_bars) - 1,
         "stop_price": _round(entry_price * (1.0 - stop_pct)),
         "target_price": _round(entry_price * (1.0 + target_pct)),
         "entry_score": signal["score"],
@@ -709,23 +712,13 @@ def _settle_trade(
     bar = bars[index]
     stop = float(active["stop_price"])
     target = float(active["target_price"])
-    hit_stop = bar.low <= stop
-    hit_target = bar.high >= target
-    if hit_stop and bar.open <= stop and index > int(active["entry_index"]):
-        # A stop cannot fill above the first available price after a gap down.
-        exit_price, exit_reason = bar.open, "gap_through_stop"
-    elif hit_stop and hit_target:
-        # Daily OHLC cannot prove intraday order, so use the loss side.  This
-        # avoids optimistic target-first backtesting.
-        exit_price, exit_reason = stop, "ambiguous_bar_stop_first"
-    elif hit_stop:
-        exit_price, exit_reason = stop, "stop_loss"
-    elif hit_target:
-        exit_price, exit_reason = target, "take_profit"
-    elif index >= int(active["planned_exit_index"]):
-        exit_price, exit_reason = bar.close, "time_exit"
-    else:
+    from .risk import bar_exit
+    outcome = bar_exit(bar.open, bar.high, bar.low, bar.close, stop, target,
+                       time_due=index >= int(active["planned_exit_index"]),
+                       allow_gap=index > int(active["entry_index"]))
+    if outcome is None:
         return None
+    exit_price, exit_reason = outcome
     entry = float(active["entry_price"])
     gross_return = exit_price / entry - 1.0 if entry > 0 else 0.0
     net_return = gross_return - transaction_cost

@@ -10,7 +10,7 @@ from .archive import deduplicate_rows
 
 WEIGHTS = {"structure": 20, "trend": 15, "momentum": 15,
            "volume_flow": 20, "volatility": 10, "levels": 20}
-VERSION = "TECH-STRUCTURE-1"
+VERSION = "TECH-STRUCTURE-2"
 
 
 def _aggregate(rows: list[dict], period: str, cutoff: date) -> list[dict]:
@@ -19,8 +19,9 @@ def _aggregate(rows: list[dict], period: str, cutoff: date) -> list[dict]:
         day = date.fromisoformat(row["source_date"])
         # The period containing cutoff might still have future sessions.
         if period == "weekly":
-            start = day - timedelta(days=day.weekday())
-            current = cutoff - timedelta(days=cutoff.weekday())
+            # Tehran market week starts Saturday, not ISO Monday.
+            start = day - timedelta(days=(day.weekday() - 5) % 7)
+            current = cutoff - timedelta(days=(cutoff.weekday() - 5) % 7)
             key = start.isoformat()
             if start >= current:
                 continue

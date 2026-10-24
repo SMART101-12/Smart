@@ -5,6 +5,7 @@ from statistics import mean, pstdev
 from math import isfinite
 
 from .financial_history import METRICS, number, settings
+from .fiscal_calendar import comparable_fiscal_year_ends
 
 
 RATIOS = {
@@ -67,8 +68,9 @@ class FinancialScoringEngine:
         for r in reports:
             by_year.setdefault(int(r["period"][:4]), []).append(r)
         # Changed year ends or multiple annual periods are not silently aligned.
-        ends = {r["period"][5:] for r in reports}
-        comparable = len(ends) == 1 and all(len(v) == 1 for v in by_year.values())
+        comparable = comparable_fiscal_year_ends(r["period"] for r in reports) and all(
+            len(v) == 1 for v in by_year.values()
+        )
         series = {k: [] for k in [*METRICS, *RATIOS]}
         annual = []
         for year in slots:
