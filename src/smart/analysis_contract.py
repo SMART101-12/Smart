@@ -12,13 +12,15 @@ from datetime import date
 from typing import Any, Iterable, Mapping
 
 
-ANALYSIS_SCHEMA_VERSION = "analysis-contract-v1"
+ANALYSIS_SCHEMA_VERSION = "analysis-contract-v2"
 ALLOWED_LABELS = {"bullish", "bearish", "neutral", "watchlist", "high-risk"}
 ALLOWED_PHASES = {"accumulation", "growth", "distribution", "correction", "decline", "neutral", "unknown"}
 ALLOWED_RISK_LEVELS = {"low", "medium", "high", "very_high", "unknown"}
 
 
 def _number(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
     try:
         result = float(value)
     except (TypeError, ValueError):
@@ -135,18 +137,17 @@ def _trend(price: float | None, fast: float | None, slow: float | None) -> str:
 
 
 def _support_resistance(rows: list[Mapping[str, Any]], price: float | None) -> dict[str, list[float]]:
-    closes = [
-        value
-        for row in rows
-        for value in [_number_from(row, "close", "pClosing", "pDrCotVal")]
-        if value is not None and value > 0
-    ]
-    if price is None or not closes:
+    from .archive import deduplicate_rows
+    from smart_v2.analysis.price_levels import confirmed_price_levels
+    canonical, _ = deduplicate_rows(list(rows), symbol="")
+    valid = [r for r in canonical if all(type(r.get(k)) in (int, float)
+        and math.isfinite(r[k]) and r[k] > 0 for k in ("open", "high", "low", "close"))
+        and r["low"] <= min(r["open"], r["close"]) <= max(r["open"], r["close"]) <= r["high"]]
+    if not valid or price is None:
         return {"supports": [], "resistances": []}
-    window = closes[-60:]
-    supports = sorted({round(value, 6) for value in window if value < price}, reverse=True)
-    resistances = sorted({round(value, 6) for value in window if value > price})
-    return {"supports": supports[:3], "resistances": resistances[:3]}
+    bars = [(r["source_date"].replace("-", ""), r) for r in valid]
+    levels = confirmed_price_levels(bars)
+    return {key: [v["price"] for v in levels[key]][:3] for key in ("supports", "resistances")}
 
 
 def _phase(snapshot: Mapping[str, Any], price: float | None, sma20: float | None, sma50: float | None) -> str:
@@ -256,15 +257,15 @@ def build_structured_analysis(snapshot: Mapping[str, Any], *, previous_outcomes:
     engine = analysis.get("factor_engine")
     engine = engine if isinstance(engine, Mapping) else {}
     score = _number(engine.get("composite"))
-    score = max(0.0, min(100.0, score if score is not None else 50.0))
-    confidence = max(0.0, min(100.0, 100.0 - 15.0 * len(quality["issues"])))
-    if phase == "unknown" or not history:
-        confidence = min(confidence, 35.0)
-    if all(value is None for value in (rsi, macd, macd_signal, sma20, sma50, ema12, ema26)):
-        confidence = min(confidence, 40.0)
+    score = max(0.0, min(100.0, score)) if score is not None else None
+    quality_score = max(0.0, min(100.0, 100.0 - 15.0 * len(quality["issues"])))
+    if not history:
+        quality_score = 0.0
+    indicators_missing = all(value is None for value in (rsi, macd, macd_signal, sma20, sma50, ema12, ema26))
+    quality["score_0_100"] = round(quality_score, 4)
     label = (
         "watchlist"
-        if quality["status"] == "poor" or not history or confidence < 45.0
+        if score is None or quality["status"] == "poor" or not history or indicators_missing
         else "high-risk"
         if risk_level == "very_high"
         else "bullish"
@@ -302,7 +303,7 @@ def build_structured_analysis(snapshot: Mapping[str, Any], *, previous_outcomes:
             {"name": "bearish", "condition": f"close below {supports[0]}" if supports else "loss of the latest swing low", "outlook": "downside risk increases; reassess rather than average blindly"},
             {"name": "neutral", "condition": "price remains between the nearest confirmed support and resistance", "outlook": "wait for a confirmed break or a lower-risk pullback"},
         ],
-        "final_assessment": {"score_0_100": round(score, 4), "confidence_0_100": round(confidence, 4), "label": label, "summary": f"{symbol or 'symbol'}: {label}; evidence ends at {as_of or 'the latest available date'}."},
+        "final_assessment": {"score_0_100": round(score, 4) if score is not None else None, "confidence_0_100": None, "confidence_status": "NOT_CALIBRATED", "label": label, "summary": f"{symbol or 'symbol'}: {label}; evidence ends at {as_of or 'the latest available date'}."},
         "actionable_notes": ["Confirm price and volume behavior in the next validated observation.", "This is not an execution order; reassess after each new snapshot."],
         "warning": warnings,
         "provenance": {"point_in_time": True, "future_rows_used_for_current_signal": False, "previous_outcomes_count": len(outcome_values)},
@@ -336,8 +337,12 @@ def validate_structured_analysis(payload: Mapping[str, Any]) -> list[str]:
         errors.append("invalid:final_assessment.label")
     for key in ("score_0_100", "confidence_0_100"):
         value = _number(final.get(key))
+        if final.get(key) is None:
+            continue
         if value is None or not 0 <= value <= 100:
             errors.append(f"invalid:final_assessment.{key}")
+    if final.get("confidence_0_100") is not None or final.get("confidence_status") != "NOT_CALIBRATED":
+        errors.append("invalid:uncalibrated_predictive_confidence")
     scenarios = payload.get("scenarios")
     names = {item.get("name") for item in scenarios if isinstance(item, Mapping)} if isinstance(scenarios, list) else set()
     if names < {"bullish", "bearish", "neutral"}:
@@ -351,7 +356,7 @@ def validate_structured_analysis(payload: Mapping[str, Any]) -> list[str]:
 
 
 def analysis_json_schema() -> dict[str, Any]:
-    """Structured-output schema used by the optional OpenAI explanation call."""
+    """Public schema for the locally computed contract, including missing values."""
     return {
         "type": "object",
         "additionalProperties": False,
@@ -360,7 +365,7 @@ def analysis_json_schema() -> dict[str, Any]:
             "schema_version": {"type": "string", "enum": [ANALYSIS_SCHEMA_VERSION]},
             "symbol": {"type": "string"},
             "as_of": {"type": ["string", "null"]},
-            "data_quality": {"type": "object", "additionalProperties": False, "required": ["status", "issues"], "properties": {"status": {"type": "string", "enum": ["good", "medium", "poor"]}, "issues": {"type": "array", "items": {"type": "string"}}}},
+            "data_quality": {"type": "object", "additionalProperties": False, "required": ["status", "issues", "rows", "score_0_100"], "properties": {"rows": {"type": "integer", "minimum": 0}, "score_0_100": {"type": "number", "minimum": 0, "maximum": 100}, "status": {"type": "string", "enum": ["good", "medium", "poor"]}, "issues": {"type": "array", "items": {"type": "string"}}}},
             "trend": {"type": "object", "additionalProperties": False, "required": ["short_term", "mid_term", "long_term"], "properties": {"short_term": {"type": "string"}, "mid_term": {"type": "string"}, "long_term": {"type": "string"}}},
             "momentum": {"type": "object", "additionalProperties": False, "required": ["rsi", "macd", "macd_signal", "interpretation"], "properties": {"rsi": {"type": ["number", "null"]}, "macd": {"type": ["number", "null"]}, "macd_signal": {"type": ["number", "null"]}, "interpretation": {"type": "string"}}},
             "volume_flow": {"type": "object", "additionalProperties": False, "required": ["volume_status", "real_money_flow", "smart_money_hint"], "properties": {"volume_status": {"type": "string"}, "real_money_flow": {"type": ["number", "null"]}, "smart_money_hint": {"type": ["string", "null"]}}},
@@ -368,7 +373,7 @@ def analysis_json_schema() -> dict[str, Any]:
             "support_resistance": {"type": "object", "additionalProperties": False, "required": ["supports", "resistances"], "properties": {"supports": {"type": "array", "items": {"type": "number"}}, "resistances": {"type": "array", "items": {"type": "number"}}}},
             "risk": {"type": "object", "additionalProperties": False, "required": ["level", "reasons"], "properties": {"level": {"type": "string", "enum": sorted(ALLOWED_RISK_LEVELS)}, "reasons": {"type": "array", "items": {"type": "string"}}}},
             "scenarios": {"type": "array", "minItems": 3, "items": {"type": "object", "additionalProperties": False, "required": ["name", "condition", "outlook"], "properties": {"name": {"type": "string", "enum": ["bullish", "bearish", "neutral"]}, "condition": {"type": "string"}, "outlook": {"type": "string"}}}},
-            "final_assessment": {"type": "object", "additionalProperties": False, "required": ["score_0_100", "confidence_0_100", "label", "summary"], "properties": {"score_0_100": {"type": "number", "minimum": 0, "maximum": 100}, "confidence_0_100": {"type": "number", "minimum": 0, "maximum": 100}, "label": {"type": "string", "enum": sorted(ALLOWED_LABELS)}, "summary": {"type": "string"}}},
+            "final_assessment": {"type": "object", "additionalProperties": False, "required": ["score_0_100", "confidence_0_100", "confidence_status", "label", "summary"], "properties": {"score_0_100": {"type": ["number", "null"], "minimum": 0, "maximum": 100}, "confidence_0_100": {"type": ["number", "null"], "minimum": 0, "maximum": 100}, "confidence_status": {"type": "string", "enum": ["NOT_CALIBRATED"]}, "label": {"type": "string", "enum": sorted(ALLOWED_LABELS)}, "summary": {"type": "string"}}},
             "actionable_notes": {"type": "array", "items": {"type": "string"}},
             "warning": {"type": "array", "items": {"type": "string"}},
             "provenance": {"type": "object", "additionalProperties": False, "required": ["point_in_time", "future_rows_used_for_current_signal", "previous_outcomes_count"], "properties": {"point_in_time": {"type": "boolean", "enum": [True]}, "future_rows_used_for_current_signal": {"type": "boolean", "enum": [False]}, "previous_outcomes_count": {"type": "integer", "minimum": 0}}},

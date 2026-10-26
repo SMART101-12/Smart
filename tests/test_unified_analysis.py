@@ -77,6 +77,18 @@ def test_unified_partial_job_and_integrity(monkeypatch, tmp_path):
     client = TestClient(webapp.app)
     assert client.get(f"/api/analyze/{job['analysis_id']}").json()["status"] == "PARTIAL"
     assert client.get(f"/api/analysis/TEST/{job['analysis_id']}/chatgpt").status_code == 200
+    bundle_response = client.get(f"/api/analysis/TEST/{job['analysis_id']}/analysts")
+    assert bundle_response.status_code == 200
+    assert "attachment" in bundle_response.headers["content-disposition"]
+    bundle = bundle_response.json()
+    saved = ua.get_artifact("TEST", job["analysis_id"], "analysis.json")
+    assert bundle["reference_analysis"] == saved
+    assert bundle["raw"]["history"] == []
+    assert bundle["repository_evidence"] is not None
+    assert bundle["quality_audit"]["market"] == saved["quality_gate"]
+    from smart.analysis_explanation import fingerprint
+    assert saved["explanation"]["reference_sha256"] == fingerprint(
+        {key: value for key, value in saved.items() if key != "explanation"})
     assert client.get(f"/api/analysis/TEST/{job['analysis_id']}/model-card").status_code == 200
     replay = client.get(f"/api/analysis/TEST/{job['analysis_id']}/replay").json()
     assert replay["matches"] is True
@@ -88,6 +100,9 @@ def test_unified_partial_job_and_integrity(monkeypatch, tmp_path):
     path.write_text(json.dumps({"status": "COMPLETED"}), encoding="utf-8")
     with pytest.raises(ValueError, match="integrity"):
         ua.get_artifact("TEST", job["analysis_id"], "analysis.json")
+    package = tmp_path / "TEST" / job["analysis_id"] / "analysts.json"
+    package.write_text('{}', encoding="utf-8")
+    assert client.get(f"/api/analysis/TEST/{job['analysis_id']}/analysts").status_code == 409
 
 
 def test_unified_routes_and_simple_dashboard(monkeypatch, tmp_path):

@@ -63,7 +63,8 @@ def test_contract_fails_closed_for_missing_history():
 
     assert payload["data_quality"]["status"] == "poor"
     assert payload["final_assessment"]["label"] == "watchlist"
-    assert payload["final_assessment"]["confidence_0_100"] <= 35
+    assert payload["final_assessment"]["confidence_0_100"] is None
+    assert payload["data_quality"]["score_0_100"] <= 35
     assert validate_structured_analysis(payload) == []
 
 

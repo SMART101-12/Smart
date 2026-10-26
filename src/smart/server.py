@@ -162,33 +162,14 @@ def list_strategies() -> dict[str, Any]:
 @mcp.tool()
 def chat_explain(snapshot: dict[str, Any], question: str = "") -> dict[str, Any]:
     """Explain a sealed SMART snapshot and return its deterministic contract."""
-    enriched = dict(snapshot)
-    enriched["structured_analysis"] = build_structured_analysis(snapshot)
-    leaderboard = enriched.get("leaderboard") or (
-        enriched.get("walk_forward_exam", {}) if isinstance(enriched.get("walk_forward_exam"), dict) else {}
-    ).get("leaderboard", [])
-    ids = [item.get("strategy_id") for item in leaderboard if isinstance(item, dict)]
-    enriched["strategy_logic"] = strategy_definitions(ids[:20])
-    prompt = (
-        "You are the explanation layer of SMART, an Iran-market decision-support "
-        "system. Use only the supplied structured facts. Explain indicators, "
-        "strategy consensus, walk-forward performance and risks. Never invent "
-        "prices, future data, trades or certainty. This is research, not advice.\n"
-        f"User question: {question or 'Explain the result clearly.'}\n"
-        + json.dumps(enriched, ensure_ascii=False, indent=2)
-    )
-    try:
-        return {
-            "status": "ok",
-            "answer": ask_model(prompt),
-            "structured_analysis": enriched["structured_analysis"],
-        }
-    except RuntimeError as exc:
-        return {
-            "status": "unavailable",
-            "error": str(exc),
-            "structured_analysis": enriched["structured_analysis"],
-        }
+    from .analysis_explanation import render_explanation
+    if snapshot.get("analysis_id"):
+        from .unified_analysis import get_artifact
+        reference = get_artifact(snapshot.get("symbol", ""), snapshot["analysis_id"], "analysis.json")
+    else:
+        reference = build_structured_analysis(snapshot)
+    explanation = render_explanation(reference)
+    return {"status": "ok", **explanation, "structured_analysis": reference}
 
 
 @mcp.tool()

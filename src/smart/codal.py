@@ -52,6 +52,9 @@ class CodalHistoricalProvider:
                         raise httpx.TimeoutException("Codal acquisition budget exceeded")
                     read_timeout = self.client.timeout.read or 20
                     response = self.client.get(url, params=params, timeout=min(read_timeout, remaining))
+                    from .analyst_evidence import capture_response
+                    capture_response(str(response.url), response.content, status=response.status_code,
+                                     content_type=response.headers.get("content-type", ""))
                     if response.status_code in {301, 302, 303, 307, 308}:
                         target = urljoin(str(response.url), response.headers.get("location", ""))
                         if not source_url(target):

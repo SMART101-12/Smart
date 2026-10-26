@@ -142,7 +142,7 @@
           <p>قیمت: ${esc(x.price)} | تغییر: ${esc(x.change_pct)}%
             | Smart Money: ${esc(x.smart_money?.phase)}</p>
           <p><b>قرارداد تصمیم‌یار:</b> ${esc(fa.label||'watchlist')} |
-            امتیاز ${esc(fa.score_0_100)} | کیفیت شواهد ${esc(fa.confidence_0_100)} |
+            امتیاز ${esc(fa.score_0_100)} | کیفیت شواهد ${esc(sa.data_quality?.score_0_100)} |
             ریسک ${esc(risk.level)} | فاز ${esc(sa.market_phase)}<br>
             روند کوتاه/میان/بلند: ${esc(tr.short_term)} / ${esc(tr.mid_term)} / ${esc(tr.long_term)}</p>
           <div class="metric">RSI14: ${esc(l.rsi14)}</div>

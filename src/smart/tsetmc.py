@@ -49,6 +49,9 @@ async def _get(path: str) -> Any:
     try:
         async with httpx.AsyncClient(timeout=15, follow_redirects=True, headers=HEADERS) as client:
             response = await client.get(f"{BASE}{path}")
+            from .analyst_evidence import capture_response
+            capture_response(str(response.url), response.content, status=response.status_code,
+                             content_type=response.headers.get("content-type", ""))
             response.raise_for_status()
             return response.json()
     except (httpx.HTTPError, ValueError) as exc:

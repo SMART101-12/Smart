@@ -20,6 +20,8 @@ async def cached_response(path: str, *, as_of: date, getter, root: Path) -> tupl
         signature = hashlib.sha256(json.dumps(raw, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
         if saved["path"] != path or saved["as_of"] != as_of.isoformat() or signature != saved["sha256"]:
             raise ValueError("Official source cache integrity conflict")
+        from .analyst_evidence import capture_cached
+        capture_cached("https://cdn.tsetmc.com/api" + path, raw)
         return raw, signature
     raw = await getter(path)
     if not isinstance(raw, dict):

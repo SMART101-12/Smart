@@ -118,35 +118,14 @@ def test_symbol_profiles_endpoint_uses_per_symbol_training(monkeypatch):
     assert response.json()["results"][0]["symbol"] == "فولاد"
 
 
-def test_chat_endpoint_uses_structured_payload(monkeypatch):
-    async def fake_scan(symbols):
-        return {"status": "ok", "results": [{"symbol": symbols[0]}], "errors": []}
-
-    async def fake_exam(symbol):
-        return {
-            "status": "COMPLETE",
-            "symbol": symbol,
-            "protocol": {"decision_uses_future_fields": False},
-            "strategy_count": 200,
-            "metrics": {},
-            "segments": [],
-            "leaderboard": [],
-        }
-
-    monkeypatch.setattr(webapp, "live_initial_analysis", fake_scan)
-    monkeypatch.setattr(webapp, "historical_exam", fake_exam)
-    seen = {}
-
-    def fake_model(prompt):
-        seen["prompt"] = prompt
-        return "توضیح آزمایشی"
-
-    monkeypatch.setattr(webapp, "ask_model", fake_model)
+def test_chat_endpoint_uses_one_unified_reference(monkeypatch):
+    reference = {"symbol": "TEST", "analysis_id": "a" * 32, "as_of": "2026-10-25",
+                 "decision": {"state": "WAIT"}, "quality_gate": {"status": "MEDIUM", "blockers": []},
+                 "entry_exit": {"plan": None}, "confidence": None}
+    monkeypatch.setattr(webapp, "_read_unified_artifact", lambda *args: reference)
     client = TestClient(webapp.app)
-    response = client.post(
-        "/api/chat",
-        json={"symbol": "TEST", "question": "چه نتیجه‌ای؟", "include_exam": True},
-    )
+    response = client.post("/api/chat", json={"symbol": "TEST", "analysis_id": "a" * 32})
     assert response.status_code == 200
-    assert response.json()["answer"] == "توضیح آزمایشی"
-    assert "future_return_5d" not in seen["prompt"]
+    assert response.json()["structured_analysis"] == reference
+    assert "WAIT" in response.json()["answer"]
+    assert response.json()["structured_analysis_ai"] is None

@@ -12,7 +12,6 @@ from typing import Any
 from openai import OpenAI
 from dotenv import load_dotenv
 
-from .analysis_contract import analysis_json_schema, validate_structured_analysis
 
 
 # Load only local development variables. Hosted deployments should inject
@@ -25,7 +24,7 @@ def get_client() -> OpenAI:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not configured")
-    return OpenAI(api_key=api_key)
+    return OpenAI(api_key=api_key, timeout=30.0, max_retries=0)
 
 
 def ask_model(prompt: str, *, model: str | None = None) -> str:
@@ -44,46 +43,32 @@ def ask_structured_analysis(
     question: str = "",
     model: str | None = None,
 ) -> dict[str, Any]:
-    """Ask the configured model for the strict SMART analysis contract.
+    """Choose an explanation outline; computed numbers remain server-owned."""
+    from copy import deepcopy
+    from .analysis_explanation import explanation_facts, render_explanation
 
-    The prompt contains only a sealed, point-in-time snapshot. Structured
-    output is validated locally; malformed or incomplete model output fails
-    closed instead of being shown as a trading conclusion.
-    """
-
-    client = get_client()
-    instructions = (
-        "تو لایه توضیح و تحلیل ساختاریافته SMART هستی. فقط از snapshot داده‌شده "
-        "تا تاریخ as_of استفاده کن؛ هیچ قیمت، حجم، شاخص، سطح یا نتیجه‌ای را حدس نزن. "
-        "داده آینده، future label و توصیه قطعی ممنوع است. شکست بدون حجم تأیید نیست. "
-        "خروجی باید دقیقاً JSON مطابق schema باشد و نقش آن تصمیم‌یار پژوهشی است، نه سفارش. "
-        f"سؤال کاربر: {question or 'تحلیل ساختاریافته را ارائه کن.'}"
-    )
-    response = client.responses.create(
+    reference = deepcopy(snapshot)
+    facts = explanation_facts(reference)
+    response = get_client().responses.create(
         model=model or os.getenv("OPENAI_MODEL", "gpt-5"),
-        instructions=instructions,
-        input=json.dumps(snapshot, ensure_ascii=False, separators=(",", ":")),
-        text={
-            "format": {
-                "type": "json_schema",
-                "name": "smart_symbol_analysis",
-                "description": "Point-in-time SMART symbol analysis contract",
-                "strict": True,
-                "schema": analysis_json_schema(),
-            }
-        },
+        instructions=("Select fact IDs relevant to the question, in a useful reading order. "
+                      "Return only IDs from the supplied facts. Do not create claims or numbers."),
+        input=json.dumps({"question": question, "facts": facts}, ensure_ascii=False),
+        text={"format": {"type": "json_schema", "name": "smart_explanation_outline",
+            "strict": True, "schema": {
+                "type": "object", "additionalProperties": False,
+                "required": ["fact_ids"], "properties": {"fact_ids": {
+                    "type": "array", "minItems": 1,
+                    "items": {"type": "string", "enum": list(facts)}}}}}},
     )
-    raw = response.output_text
     try:
-        parsed = json.loads(raw)
+        parsed = json.loads(response.output_text)
     except (TypeError, ValueError) as exc:
-        raise RuntimeError("Structured analysis response was not valid JSON") from exc
-    if not isinstance(parsed, dict):
-        raise RuntimeError("Structured analysis response must be a JSON object")
-    errors = validate_structured_analysis(parsed)
-    if errors:
-        raise RuntimeError("Structured analysis failed validation: " + ", ".join(errors))
-    return parsed
+        raise RuntimeError("Explanation response was not valid JSON") from exc
+    if not isinstance(parsed, dict) or set(parsed) != {"fact_ids"}:
+        raise RuntimeError("Explanation may only select computed fact IDs")
+    explanation = render_explanation(reference, parsed["fact_ids"])
+    return {"reference": reference, **explanation}
 
 
 def healthcheck() -> dict[str, Any]:

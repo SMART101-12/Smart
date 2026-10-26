@@ -11,7 +11,7 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, FiniteFloat, StrictBool
 
-from .ai import ask_model, ask_structured_analysis, healthcheck
+from .ai import ask_structured_analysis, healthcheck
 from .analysis_contract import build_structured_analysis
 from .decision_memory import DecisionMemory
 from .daily_cycle import (
@@ -138,6 +138,13 @@ def unified_analysis_chatgpt(symbol: str, analysis_id: str):
 @app.get("/api/analysis/{symbol}/{analysis_id}/raw")
 def unified_analysis_raw(symbol: str, analysis_id: str):
     return _read_unified_artifact(symbol, analysis_id, "raw.json")
+
+
+@app.get("/api/analysis/{symbol}/{analysis_id}/analysts")
+def unified_analysis_analysts(symbol: str, analysis_id: str):
+    from fastapi.responses import JSONResponse
+    payload = _read_unified_artifact(symbol, analysis_id, "analysts.json")
+    return JSONResponse(payload, headers={"Content-Disposition": f'attachment; filename="smart-evidence-{analysis_id}.json"'})
 
 
 @app.get("/api/analysis/{symbol}/{analysis_id}/chart")
@@ -382,6 +389,7 @@ class ChatRequest(BaseModel):
     question: str = ""
     include_exam: bool = True
     structured: bool = False
+    analysis_id: str | None = None
 
 
 class PositionSizeRequest(BaseModel):
@@ -800,76 +808,48 @@ async def settle(request: SettleRequest):
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
-    """Explain structured SMART output with the configured OpenAI model."""
-    try:
-        symbol = request.symbol.strip()
-        scan_result = await live_initial_analysis([symbol])
-        compact_scan = dict(scan_result)
-        compact_results = []
-        for item in scan_result.get("results", []):
-            row = dict(item)
-            analysis = dict(row.get("analysis") or {})
-            technical = dict(analysis.get("technical_history") or {})
-            technical["history"] = (technical.get("history") or [])[-10:]
-            analysis["technical_history"] = technical
-            row["analysis"] = analysis
-            compact_results.append(row)
-        compact_scan["results"] = compact_results
-        payload: dict = {"scan": compact_scan}
-        saved_profile = load_latest_symbol_profile(symbol)
-        if saved_profile:
-            payload["symbol_specific_entry_model"] = summarize_profile(saved_profile)
-        if request.include_exam:
-            exam_result = await historical_exam(symbol)
-            payload["walk_forward_exam"] = {
-                key: exam_result.get(key)
-                for key in (
-                    "status", "symbol", "protocol", "bars", "range",
-                    "strategy_count", "metrics", "segments", "leaderboard",
-                    "learning",
-                )
-            }
-            leaderboard_ids = [
-                item.get("strategy_id")
-                for item in exam_result.get("leaderboard", [])
-                if item.get("strategy_id")
-            ]
-            payload["strategy_logic"] = {
-                "families": sorted({item["family"] for item in strategy_definitions()}),
-                "top_definitions": strategy_definitions(leaderboard_ids[:20]),
-            }
-        # Always expose the deterministic contract.  Only an explicit
-        # structured request calls the optional OpenAI endpoint.
-        first_result = (compact_scan.get("results") or [{}])[0]
-        payload["structured_analysis"] = build_structured_analysis(first_result)
-        if request.structured:
-            try:
-                payload["structured_analysis_ai"] = ask_structured_analysis(
-                    payload["structured_analysis"],
-                    question=request.question,
-                )
-            except RuntimeError as exc:
-                payload["structured_analysis_ai_error"] = str(exc)
-        prompt = (
-            "You are SMART's explanation layer. Explain the supplied result in "
-            "Persian, separating facts, indicators, strategy consensus, historical "
-            "walk-forward performance and risks. Use no data outside the payload; "
-            "do not promise profit or issue an execution order.\n"
-            f"Question: {request.question or 'نتیجه را برای من توضیح بده.'}\n"
-            + json.dumps(payload, ensure_ascii=False)
-        )
-        return {
-            "status": "ok",
-            "symbol": symbol,
-            "answer": ask_model(prompt),
-            "structured_analysis": payload["structured_analysis"],
-            "structured_analysis_ai": payload.get("structured_analysis_ai"),
-            "structured_analysis_ai_error": payload.get("structured_analysis_ai_error"),
-        }
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    """Explain exactly one verified unified analysis, with a local fallback."""
+    from . import unified_analysis as ua
+    from .analysis_explanation import render_explanation
+    from copy import deepcopy
+    from .analysis_workers import run_blocking
+    symbol = request.symbol.strip()
+    if not symbol:
+        raise HTTPException(422, detail="symbol is required")
+    if request.analysis_id:
+        reference = _read_unified_artifact(symbol, request.analysis_id, "analysis.json")
+    else:
+        try:
+            job = ua.create_job(symbol)
+        except ValueError as exc:
+            raise HTTPException(422, detail=str(exc)) from exc
+        if job.get("reused_active"):
+            raise HTTPException(409, detail={"message": "analysis is running", "analysis_id": job["analysis_id"]})
+        await ua.run_job(job)
+        if job.get("status") not in {"COMPLETED", "PARTIAL"}:
+            raise HTTPException(503, detail={"message": "analysis unavailable", "analysis_id": job["analysis_id"], "status": job.get("status")})
+        reference = _read_unified_artifact(symbol, job["analysis_id"], "analysis.json")
+    # Explanation is rendered afresh; a saved narrative cannot override facts.
+    facts = {key: value for key, value in reference.items() if key != "explanation"}
+    explanation = render_explanation(facts)
+    ai_result, ai_error = None, None
+    if request.structured:
+        try:
+            ai_result = await run_blocking(ask_structured_analysis, deepcopy(facts), question=request.question)
+            if ai_result.get("reference") != facts:
+                raise RuntimeError("Model explanation changed the reference analysis")
+            # Render from the original facts again. Never trust returned text.
+            explanation = render_explanation(facts, ai_result.get("fact_ids"))
+            ai_result = {"reference": facts, **explanation}
+        except Exception:
+            ai_result = None
+            ai_error = "توضیح مدل در دسترس یا معتبر نیست؛ متن محاسباتی گزارش نمایش داده شد."
+    return {"status": "ok", "symbol": reference.get("symbol", symbol),
+            "analysis_id": reference.get("analysis_id"), "answer": explanation["answer"],
+            "explanation": explanation, "structured_analysis": reference,
+            "structured_analysis_ai": ai_result, "structured_analysis_ai_error": ai_error,
+            "raw_data_url": (reference.get("local_urls") or {}).get("analysts"),
+            "include_exam": "Unified analysis includes dated research evidence; no separate computation is used."}
 
 
 @app.get("/legacy", response_class=HTMLResponse)
