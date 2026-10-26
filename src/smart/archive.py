@@ -39,6 +39,7 @@ ALIASES: dict[str, tuple[str, ...]] = {
         "pdrb",
     ),
     "last_price": ("last_price", "pDrCotVal", "pdv", "pl"),
+    "settlement_price": ("settlement_price", "pClosing", "priceClosing", "pcl"),
     "previous_close": (
         "previous_close",
         "pYesterday",
@@ -115,6 +116,7 @@ def normalize_daily_row(
     symbol: str = "",
     ins_code: str = "",
     source: str = "TSETMC",
+    price_basis: str = "source",
 ) -> dict[str, Any] | None:
     """Return one analysis-ready row or ``None`` when its date is invalid.
 
@@ -123,6 +125,8 @@ def normalize_daily_row(
     code.  No synthetic zero is introduced for a missing value.
     """
 
+    if price_basis not in {"source", "last_trade"}:
+        raise ValueError("Unsupported candle price basis")
     parsed = _row_date(row)
     if parsed is None:
         return None
@@ -152,6 +156,12 @@ def normalize_daily_row(
         } and number is not None and number <= 0:
             number = None
         output[field] = number if number is not None else None
+    # Settlement and the final trade are separate observed fields. Do not
+    # widen the traded high/low to force the settlement into an OHLC candle.
+    output["close_basis"] = row.get("close_basis") or ("provided_close" if row.get("close") is not None else "settlement")
+    if price_basis == "last_trade" and row.get("close") is None and output.get("last_price") is not None:
+        output["close"] = output["last_price"]
+        output["close_basis"] = "last_trade"
     # A deterministic fingerprint lets a quality report identify exactly
     # which source row won a duplicate-date merge.
     output["source_row_hash"] = hashlib.sha256(
@@ -170,6 +180,7 @@ def deduplicate_rows(
     symbol: str = "",
     ins_code: str = "",
     source: str = "TSETMC",
+    price_basis: str = "source",
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Normalize and deduplicate rows by market date.
 
@@ -182,11 +193,12 @@ def deduplicate_rows(
     by_date: dict[date, dict[str, Any]] = {}
     invalid = 0
     duplicate_dates: set[str] = set()
+    conflicting_dates: set[str] = set()
     for raw in source_rows:
         if not isinstance(raw, dict):
             invalid += 1
             continue
-        normalized = normalize_daily_row(raw, symbol=symbol, ins_code=ins_code, source=source)
+        normalized = normalize_daily_row(raw, symbol=symbol, ins_code=ins_code, source=source, price_basis=price_basis)
         if normalized is None:
             invalid += 1
             continue
@@ -194,6 +206,9 @@ def deduplicate_rows(
         previous = by_date.get(key)
         if previous is not None:
             duplicate_dates.add(normalized["source_date"])
+            if any(normalized.get(field) != previous.get(field)
+                   for field in ("open", "high", "low", "close", "volume", "settlement_price")):
+                conflicting_dates.add(normalized["source_date"])
             candidate_key = (_completeness(normalized), normalized["source_row_hash"])
             previous_key = (_completeness(previous), previous["source_row_hash"])
             if candidate_key > previous_key:
@@ -207,6 +222,7 @@ def deduplicate_rows(
         "invalid_rows": invalid,
         "duplicate_dates": len(duplicate_dates),
         "duplicate_date_values": sorted(duplicate_dates),
+        "conflicting_duplicate_dates": sorted(conflicting_dates),
     }
 
 

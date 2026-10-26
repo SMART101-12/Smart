@@ -155,10 +155,13 @@ def unified_analysis_chart(symbol: str, analysis_id: str):
     raw = _read_unified_artifact(symbol, analysis_id, "raw.json")
     gate = summary.get("quality_gate") or {}
     excluded = {day for key in ("invalid_ohlc_dates", "missing_volume_dates",
-                                "future_dates", "incomplete_session_dates")
+                                "future_dates", "incomplete_session_dates", "conflicting_duplicate_dates")
                 for day in gate.get(key, [])}
     cutoff = gate.get("latest_valid_date") or summary.get("as_of")
-    rows, _ = deduplicate_rows(raw.get("history") or [], symbol=symbol)
+    history = raw.get("verified_analysis_history")
+    if history is None:
+        history = raw.get("history") or []
+    rows, _ = deduplicate_rows(history, symbol=symbol)
     bars = [{key: row[key] for key in ("source_date", "open", "high", "low", "close", "volume")}
             for row in rows if cutoff and row["source_date"] <= cutoff
             and row["source_date"] not in excluded

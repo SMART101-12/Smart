@@ -33,6 +33,30 @@ def fake_model(monkeypatch, output):
     return calls
 
 
+def test_explanation_round_trip_through_installed_responses_sdk(monkeypatch):
+    import httpx
+    from openai import OpenAI
+    requests = []
+    def respond(request):
+        payload = json.loads(request.content)
+        requests.append(payload)
+        assert request.url.path == "/v1/responses"
+        assert payload["text"]["format"]["strict"] is True
+        assert set(payload["text"]["format"]["schema"]["properties"]) == {"fact_ids"}
+        return httpx.Response(200, json={
+            "id": "resp_verified_test", "object": "response", "created_at": 0,
+            "status": "completed", "model": "gpt-5", "output": [{
+                "id": "msg_test", "type": "message", "role": "assistant", "status": "completed",
+                "content": [{"type": "output_text", "text": '{"fact_ids":["momentum"]}', "annotations": []}]}]})
+    with OpenAI(api_key="test-only", base_url="https://sdk-test.invalid/v1",
+                http_client=httpx.Client(transport=httpx.MockTransport(respond))) as client:
+        monkeypatch.setattr(ai, "get_client", lambda: client)
+        result = ai.ask_structured_analysis(reference())
+    assert len(requests) == 1
+    assert result["reference"] == reference()
+    assert "58" in result["answer"]
+
+
 def test_model_selects_facts_without_changing_numeric_reference(monkeypatch):
     original = reference()
     frozen = deepcopy(original)
@@ -83,6 +107,50 @@ def test_chat_never_displays_ai_authored_text(monkeypatch):
     assert response.status_code == 200
     assert "999" not in response.json()["answer"]
     assert "58" in response.json()["answer"]
+
+
+def test_new_chat_runs_the_unified_job_and_never_an_independent_scan(monkeypatch):
+    from smart import unified_analysis as ua
+    original = reference()
+    calls = []
+    monkeypatch.setattr(ua, "create_job", lambda symbol: {"analysis_id": "a" * 32, "symbol": symbol})
+    async def run(job):
+        calls.append(job["analysis_id"])
+        job["status"] = "PARTIAL"
+    async def forbidden(*args, **kwargs):
+        raise AssertionError("Independent scanner must not run for chat")
+    monkeypatch.setattr(ua, "run_job", run)
+    monkeypatch.setattr(webapp, "live_initial_analysis", forbidden)
+    monkeypatch.setattr(webapp, "historical_exam", forbidden)
+    monkeypatch.setattr(webapp, "_read_unified_artifact", lambda *args: deepcopy(original))
+    result = TestClient(webapp.app).post("/api/chat", json={"symbol": "TEST", "include_exam": True})
+    assert result.status_code == 200
+    assert calls == ["a" * 32]
+    assert result.json()["structured_analysis"] == original
+
+
+def test_narrative_keeps_both_source_failures_and_data_defects():
+    original = reference()
+    original["data_quality"] = {"issues": ["conflicting_duplicate_dates"]}
+    original["quality_gate"]["acquisition"] = {"status": "PARTIAL",
+        "rejected": [{"date": "2026-10-25", "error": "Closing price outside observed high/low"}],
+        "unresolved_dates": ["2026-10-25"]}
+    result = render_explanation(original, ["decision"])
+    assert "source_stale_or_unavailable" in result["answer"]
+    assert "conflicting_duplicate_dates" in result["answer"]
+    assert "Closing price outside observed high/low" in result["answer"]
+
+
+def test_unified_narrative_includes_the_verified_indicator_contract():
+    original = reference()
+    original["legacy_technical"] = {"schema_version": "analysis-contract-v2",
+                                    "momentum": {"rsi": 47.125, "macd": -2, "macd_signal": -1},
+                                    "support_resistance": {"supports": [98], "resistances": [125]}}
+    original.pop("momentum")
+    result = render_explanation(original)
+    assert "47.125" in result["answer"]
+    assert "98" in result["answer"]
+    assert "125" in result["answer"]
 
 
 def test_unavailable_prediction_confidence_is_not_a_quality_probability():

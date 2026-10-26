@@ -76,6 +76,9 @@ def repository_evidence(repository, symbol: str, ins_code: str) -> dict:
         cursor = connection.execute("SELECT source,observed_at,market_date,payload FROM market_snapshots WHERE symbol IN (?,?)",
                                     (symbol, str(ins_code)))
         result["market_snapshots"] = [dict(zip(("source", "observed_at", "market_date", "payload"), row)) for row in cursor]
+        cursor = connection.execute("SELECT request_date,payload FROM historical_sync_log WHERE symbol=? AND source='TSETMC' ORDER BY id",
+                                    (str(ins_code),))
+        result["market_sync_log"] = [{"request_date": stamp, "payload": json.loads(payload)} for stamp, payload in cursor]
     result["market_history"] = repository.history(ins_code, "tsetmc")
     result["market_history_alias"] = repository.history(symbol, "tsetmc")
     result["market_sync"] = repository.state(ins_code, "TSETMC")

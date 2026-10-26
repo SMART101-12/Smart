@@ -17,5 +17,6 @@ def horizon_summaries(verified_rows: list[dict]) -> dict:
             "observed_return_pct": (last["close"] / first["close"] - 1) * 100 if rows else None,
             "calendar_continuity": "UNVERIFIED", "price_adjustment": "UNVERIFIED",
             "method": "verified_completed_session_observations",
+            "close_bases": sorted({r.get("close_basis", "provided_close") for r in rows}),
         }
     return result

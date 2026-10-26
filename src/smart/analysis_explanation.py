@@ -20,16 +20,45 @@ def explanation_facts(reference: dict[str, Any]) -> dict[str, str]:
     quality = reference.get("data_quality") or {}
     final = reference.get("final_assessment") or {}
     decision = reference.get("decision") or {}
+    issues = list(dict.fromkeys([*gate.get("blockers", []), *quality.get("issues", [])]))
     facts = {
         "identity": f"تحلیل {reference.get('symbol', '')} بر اساس داده تا تاریخ {shown(reference.get('as_of'))} است.",
         "quality": f"وضعیت کیفیت داده: {shown(gate.get('status') or quality.get('status'))}. مشکلات داده: "
-                   + ("، ".join(gate.get("blockers") or quality.get("issues") or []) or "مشکلی در کنترل‌های انجام‌شده ثبت نشده است؛ این به معنی تأیید کامل منبع نیست."),
+                   + ("، ".join(issues) or "مشکلی در کنترل‌های انجام‌شده ثبت نشده است؛ این به معنی تأیید کامل منبع نیست."),
         "decision": "جمع‌بندی موتور محاسباتی: " + shown(decision.get("state") or final.get("label")) + ".",
         "confidence": "احتمال موفقیت پیش‌بینی کالیبره نشده است؛ امتیاز کیفیت داده و امتیاز شواهد، احتمال سود نیستند.",
     }
-    momentum = reference.get("momentum") or {}
+    acquisition = gate.get("acquisition") or {}
+    if acquisition:
+        facts["acquisition"] = ("وضعیت دریافت منبع قیمت: " + shown(acquisition.get("status"))
+            + "؛ ردیف‌های ردشده: " + str(len(acquisition.get("rejected") or []))
+            + "؛ تاریخ‌های حل‌نشده: " + str(len(acquisition.get("unresolved_dates") or []))
+            + ". خطای منبع: " + shown(acquisition.get("error")) + ".")
+        if acquisition.get("rejected"):
+            facts["acquisition_rejections"] = "نمونهٔ خطاهای ثبت‌شدهٔ دریافت: " + "؛ ".join(
+                f"{shown(item.get('date'))}: {shown(item.get('error'))}"
+                for item in acquisition["rejected"][:5] if isinstance(item, dict)) + ". جزئیات کامل در بستهٔ دادهٔ خام موجود است."
+    price_range = gate.get("price_range_validation") or {}
+    if price_range:
+        facts["price_validation"] = ("کنترل هندسهٔ کندل: " + shown(price_range.get("status"))
+            + "؛ کف " + shown(price_range.get("observed_low"))
+            + "؛ سقف " + shown(price_range.get("observed_high"))
+            + "؛ قیمت مبنای کندل " + shown(price_range.get("observed_close"))
+            + "؛ نوع مبنا " + shown(price_range.get("close_basis"))
+            + "؛ قیمت پایانی منبع " + shown(price_range.get("observed_settlement"))
+            + ". این کنترل به معنی تأیید دامنهٔ مجاز بورس یا تعدیل قیمت نیست.")
+    computed_contract = reference.get("legacy_technical") or reference
+    momentum = computed_contract.get("momentum") or {}
     if momentum:
-        facts["momentum"] = "RSI: " + shown(momentum.get("rsi")) + "؛ MACD: " + shown(momentum.get("macd")) + "."
+        facts["momentum"] = ("RSI: " + shown(momentum.get("rsi")) + "؛ MACD: "
+            + shown(momentum.get("macd")) + "؛ خط سیگنال: " + shown(momentum.get("macd_signal")) + ".")
+    pivot_levels = computed_contract.get("support_resistance") or {}
+    if pivot_levels and computed_contract.get("schema_version") == "analysis-contract-v2":
+        facts["observed_pivots"] = ("حمایت‌های پیوت تأییدشده: "
+            + ("، ".join(map(str, pivot_levels.get("supports") or [])) or "یافت نشد")
+            + "؛ مقاومت‌های پیوت تأییدشده: "
+            + ("، ".join(map(str, pivot_levels.get("resistances") or [])) or "یافت نشد")
+            + ". این سطوح به‌تنهایی پلن ورود و خروج نیستند.")
     technical = reference.get("technical_structure") or reference.get("technical") or {}
     for name, frame in (technical.get("timeframes") or {}).items():
         title = {"daily": "روزانه", "weekly": "هفتگی", "monthly": "ماهانه"}.get(name, name)

@@ -85,6 +85,9 @@ def report_source_health(summary: dict) -> list[dict]:
     return [
         {"source": "TSETMC", "status": gate.get("status", "UNAVAILABLE"),
          "data_date": gate.get("latest_valid_date"), "freshness": gate.get("freshness"),
+         "acquisition": gate.get("acquisition"),
+         "conflicting_dates": gate.get("conflicting_duplicate_dates", []),
+         "price_range_validation": gate.get("price_range_validation"),
          "errors": gate.get("blockers", []), "description": "قیمت و حجم؛ سلامت کل تاریخچه و پنجره اخیر جدا هستند."},
         {"source": "کدال", "status": codal.get("source_status", "UNAVAILABLE"),
          "data_date": codal.get("latest_publication_date"), "errors": codal.get("blockers", []),

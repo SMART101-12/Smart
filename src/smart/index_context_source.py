@@ -55,7 +55,8 @@ async def fetch_index_context(*, symbol: str, ins_code: str, is_fund: bool,
             finally:
                 temporary.unlink(missing_ok=True)
         from .analyst_evidence import capture_cached
-        capture_cached(f"https://cdn.tsetmc.com/api/index-evidence/{code}", raw)
+        capture_cached(f"https://cdn.tsetmc.com/api/Instrument/GetInstrumentInfo/{code}", raw["info"])
+        capture_cached(f"https://cdn.tsetmc.com/api/Index/GetIndexB2History/{code}", raw["history"])
         info = raw["info"].get("instrumentInfo") or {}
         if (str(info.get("insCode")) != code or str(info.get("yVal")) != "68"
                 or normalize(info.get("lVal30")) != normalize(expected_name)):

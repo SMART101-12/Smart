@@ -25,6 +25,13 @@ def validate_market_row(row, requested_date=None):
     high, low = number(row.get("priceMax")), number(row.get("priceMin"))
     if high is not None and low is not None and high < low:
         raise ValueError("Invalid market high/low")
+    if high is not None and low is not None and high > 0 and low > 0:
+        last_trade = number(row.get("pDrCotVal"))
+        if last_trade is not None and last_trade > 0 and not low <= last_trade <= high:
+            raise ValueError("Last traded price outside observed high/low")
+        opening = number(row.get("priceFirst"))
+        if opening is not None and opening > 0 and not low <= opening <= high:
+            raise ValueError("Opening price outside observed high/low")
     return dict(row, dEven=int(day.strftime("%Y%m%d")))
 
 
@@ -33,6 +40,7 @@ async def repository_history(ins_code, fetch, top=0, repository=None, force=Fals
     identity = str(ins_code)
     today = datetime.now(ZoneInfo("Asia/Tehran")).date()
     observations = {}
+    rejected_cached = []
     stored = repo.history(identity, "tsetmc")
     for symbol in repo.instrument_symbols(identity):
         stored.extend(repo.history(symbol, "tsetmc"))
@@ -49,19 +57,24 @@ async def repository_history(ins_code, fetch, top=0, repository=None, force=Fals
             # A stale symbol alias cannot replace a newer identity snapshot.
             if old is None or stamp > old[1]:
                 observations[row["dEven"]] = (row, stamp)
-        except (ValueError, TypeError):
-            continue
+        except (ValueError, TypeError) as exc:
+            payload = item.get("payload")
+            rejected_cached.append({"date": payload.get("dEven") if isinstance(payload, dict) else None,
+                                    "error": str(exc)})
     local = [item[0] for item in observations.values()]
     local.sort(key=lambda r: r["dEven"], reverse=True)
     state = repo.state(identity, "TSETMC")
     refresh_dates = {parse_market_date(key) for key, (_, stamp) in observations.items()
                      if 0 < (today - parse_market_date(key)).days <= 5
                      and stamp.astimezone(ZoneInfo("Asia/Tehran")).date() <= parse_market_date(key)}
-    if not force and not refresh_dates and repo.fresh(identity, "TSETMC", settings()["sync_ttl_seconds"]):
+    if (not force and not refresh_dates and not rejected_cached and state.get("status") == "SUCCESS"
+            and not state.get("rejected") and not state.get("unresolved_dates")
+            and repo.fresh(identity, "TSETMC", settings()["sync_ttl_seconds"])):
         return local[:top] if top else local
     result = {"symbol": identity, "source": "TSETMC", "status": "SUCCESS",
               "local_records": len(local), "records_received": 0, "inserted": 0,
               "updated": 0, "rejected": [], "unresolved_dates": [],
+              "rejected_cached": rejected_cached,
               "refreshed_prior_intraday_dates": sorted(d.isoformat() for d in refresh_dates),
               "last_sync_date": state.get("last_sync_date")}
     fetched = []
@@ -81,7 +94,11 @@ async def repository_history(ins_code, fetch, top=0, repository=None, force=Fals
             latest = max(parse_market_date(r["dEven"]) for r in local)
             candidates = set(expected_market_dates(latest + timedelta(days=1), today))
             candidates.update(refresh_dates)
+            candidates.update(day for item in rejected_cached
+                              if (day := parse_market_date(item["date"])) is not None and day <= today)
             candidates.update(d for raw in state.get("unresolved_dates", []) if (d := parse_market_date(raw)))
+            candidates.update(day for item in state.get("rejected", []) if isinstance(item, dict)
+                              and (day := parse_market_date(item.get("date"))) is not None and day <= today)
             dates = sorted(candidates)
             # Bounded catch-up; unfinished dates stay explicit for the next sync.
             result["unresolved_dates"] = [d.isoformat() for d in dates[400:]]
@@ -96,9 +113,26 @@ async def repository_history(ins_code, fetch, top=0, repository=None, force=Fals
                 except Exception as exc:
                     result["unresolved_dates"].append(day.isoformat())
                     result["rejected"].append({"date": day.isoformat(), "error": str(exc)})
+        by_date, conflicts = {}, set()
+        for item in fetched:
+            previous = by_date.get(item["dEven"])
+            if previous is not None and any(number(item.get(field)) != number(previous.get(field))
+                    for field in ("priceFirst", "priceMax", "priceMin", "pDrCotVal", "pClosing", "qTotTran5J")):
+                conflicts.add(item["dEven"])
+            by_date[item["dEven"]] = item
+        if conflicts:
+            result["conflicting_duplicate_dates"] = sorted(conflicts)
+            result["rejected"].extend({"date": day, "error": "Conflicting source observations for one date"}
+                                      for day in sorted(conflicts))
+            result["unresolved_dates"].extend(datetime.strptime(str(day), "%Y%m%d").date().isoformat()
+                                               for day in sorted(conflicts))
+        fetched = [item for day, item in by_date.items() if day not in conflicts]
         if fetched:
             counts = repo.save_daily_history_incremental(identity, "tsetmc", datetime.now(timezone.utc), fetched)
             result.update(counts)
+            received_dates = {str(row["dEven"]) for row in fetched}
+            for item in rejected_cached:
+                item["resolved"] = str(item["date"]) in received_dates
         if result["rejected"] or result["unresolved_dates"]:
             result["status"] = "PARTIAL"
         else:

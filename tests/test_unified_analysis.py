@@ -213,6 +213,72 @@ def test_cached_history_keeps_technical_when_live_snapshot_fails(monkeypatch, tm
     assert result["confidence"] is None
 
 
+@pytest.mark.parametrize("defect", ["conflicting_history", "failed_gate", "distinct_settlement"])
+def test_all_analysis_consumers_use_only_verified_history(monkeypatch, tmp_path, defect):
+    from smart import data_quality_gate
+    monkeypatch.setenv("SMART_ANALYSIS_ROOT", str(tmp_path / "runs"))
+    monkeypatch.setenv("SMART_HISTORICAL_DB", str(tmp_path / "sources.db"))
+    end = date.today() - timedelta(days=1)
+    raw = [{"date": (end - timedelta(days=39-i)).strftime("%Y%m%d"),
+            "open": 100+i, "high": 102+i, "low": 99+i, "close": 101+i,
+            "volume": 1000} for i in range(40)]
+    conflict = raw[20]["date"]
+    if defect == "conflicting_history":
+        raw.append({**raw[20], "close": 120})
+    elif defect == "distinct_settlement":
+        raw = [{"dEven": int(r["date"]), "priceFirst": r["open"],
+                "priceMax": r["high"], "priceMin": r["low"], "pDrCotVal": r["close"],
+                "pClosing": r["close"] - 10, "qTotTran5J": r["volume"]} for r in raw]
+    async def search(symbol):
+        return {"insCode": "123", "lVal18AFC": symbol}
+    async def history(code):
+        return raw
+    async def misleading_live_snapshot(symbol):
+        return {"price": 999999, "structured_analysis": {
+            "momentum": {"rsi": 99}, "trend": {"short_term": "bullish"}}}
+    def broken_gate(*args, **kwargs):
+        raise RuntimeError("Audit unavailable")
+    if defect == "failed_gate":
+        monkeypatch.setattr(data_quality_gate, "market_gate", broken_gate)
+    monkeypatch.setattr(tsetmc, "search_symbol", search)
+    monkeypatch.setattr(tsetmc, "daily_history", history)
+    monkeypatch.setattr(tsetmc, "analyze_symbol", misleading_live_snapshot)
+    monkeypatch.setattr(HistoricalDataSyncManager, "sync_company", lambda *a: {"status": "SOURCE_UNAVAILABLE"})
+    monkeypatch.setattr(HistoricalDataSyncManager, "sync_financial", lambda *a: {"status": "SOURCE_UNAVAILABLE"})
+    monkeypatch.setattr(strategy_lab, "walk_forward_exam", lambda *a, **kw: {"status": "INSUFFICIENT_DATA"})
+    monkeypatch.setattr(symbol_learning, "build_symbol_profile", lambda *a, **kw: {"status": "INSUFFICIENT_HISTORY"})
+    job = ua.create_job("TEST")
+    asyncio.run(ua.run_job(job))
+    assert job["status"] == "PARTIAL"
+    summary = ua.get_artifact("TEST", job["analysis_id"], "analysis.json")
+    bundle = ua.get_artifact("TEST", job["analysis_id"], "analysts.json")
+    chart = TestClient(webapp.app).get(f"/api/analysis/TEST/{job['analysis_id']}/chart").json()
+    verified = bundle["raw"]["verified_analysis_history"]
+    assert bundle["raw"]["history"] == raw
+    assert bundle["reference_analysis"] == summary
+    if defect == "conflicting_history":
+        assert len(verified) == 39
+        assert conflict.replace("-", "") not in [r["date"] for r in verified]
+        assert len(chart["bars"]) == 39
+        assert summary["horizon_summaries"]["250"]["observations"] == 39
+        assert summary["legacy_technical"]["momentum"]["rsi"] != 99
+        assert "conflicting_duplicate_dates" in summary["data_quality"]["issues"]
+    elif defect == "failed_gate":
+        assert not verified and not chart["bars"]
+        assert summary["horizon_summaries"]["20"]["observations"] == 0
+        assert "quality_gate_execution_failed" in summary["quality_gate"]["blockers"]
+        assert summary["entry_exit"]["plan"] is None
+        assert summary["entry_exit"]["conditional"] is None
+    else:
+        assert len(verified) == len(chart["bars"]) == 40
+        assert chart["bars"][-1]["close"] == raw[-1]["pDrCotVal"]
+        assert verified[-1]["settlement_price"] == raw[-1]["pClosing"]
+        assert summary["quality_gate"]["invalid_ohlc_dates"] == []
+        assert summary["quality_gate"]["price_range_validation"]["close_basis"] == "last_trade"
+        assert summary["technical_structure"]["timeframes"]["daily"]["last_close"] == raw[-1]["pDrCotVal"]
+        assert summary["horizon_summaries"]["20"]["close_bases"] == ["last_trade"]
+
+
 def test_gap_through_stop_uses_actual_open():
     bars = [Bar("20260101", 100, 102, 98, 100, 1000, None, None),
             Bar("20260102", 100, 101, 99, 100, 1000, None, None),

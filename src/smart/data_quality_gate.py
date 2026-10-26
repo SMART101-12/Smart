@@ -35,7 +35,8 @@ def calculated(value: float | int | None, *, unit: str, formula: str,
 
 
 def market_gate(rows: list[dict[str, Any]], *, symbol: str, as_of: date | None = None,
-                max_age_days: int = 5, completed_before: date | None = None) -> dict[str, Any]:
+                max_age_days: int = 5, completed_before: date | None = None,
+                acquisition: dict[str, Any] | None = None) -> dict[str, Any]:
     """Audit raw observations; exclude invalid rows only in downstream engines.
 
     A missing latest candle or a date after as_of blocks current conclusions.
@@ -44,8 +45,9 @@ def market_gate(rows: list[dict[str, Any]], *, symbol: str, as_of: date | None =
     as_of = as_of or date.today()
     if max_age_days < 0:
         raise ValueError("max_age_days must be nonnegative")
-    canonical, dedup = deduplicate_rows(rows, symbol=symbol)
+    canonical, dedup = deduplicate_rows(rows, symbol=symbol, price_basis="last_trade")
     valid, invalid, missing_volume, future, incomplete = [], [], [], [], []
+    conflicts = dedup["conflicting_duplicate_dates"]
     for item in canonical:
         day = date.fromisoformat(item["source_date"])
         if day > as_of:
@@ -53,6 +55,8 @@ def market_gate(rows: list[dict[str, Any]], *, symbol: str, as_of: date | None =
             continue
         if completed_before is not None and day >= completed_before:
             incomplete.append(item["source_date"])
+            continue
+        if item["source_date"] in conflicts:
             continue
         values = [item.get(key) for key in ("open", "high", "low", "close")]
         if any(v is None or not isinstance(v, (int, float)) or not isfinite(v)
@@ -83,16 +87,35 @@ def market_gate(rows: list[dict[str, Any]], *, symbol: str, as_of: date | None =
         blockers.append("source_stale_or_unavailable")
     if future:
         blockers.append("future_dated_source_rows")
+    acquisition = acquisition or {}
+    unresolved = sorted({str(day) for day in acquisition.get("unresolved_dates", [])})
+    # A failed requested date is not proof of a market holiday. Report the
+    # uncertainty and withhold current entry levels until it is resolved.
+    unresolved_completed = [raw for raw in unresolved if (day := parse_market_date(raw)) is not None
+                            and day <= as_of and (completed_before is None or day < completed_before)]
+    if unresolved_completed:
+        blockers.append("unresolved_completed_source_dates")
+    if acquisition.get("status") == "SOURCE_UNAVAILABLE":
+        blockers.append("market_acquisition_unavailable")
+    rejected = [item for item in [*acquisition.get("rejected", []), *acquisition.get("rejected_cached", [])]
+                if not isinstance(item, dict) or not item.get("resolved")]
+    rejected_latest = [item for item in rejected if isinstance(item, dict)
+                       and (day := parse_market_date(item.get("date"))) is not None
+                       and (latest is None or day.isoformat() >= latest)
+                       and day <= as_of and (completed_before is None or day < completed_before)]
+    if rejected_latest:
+        blockers.append("latest_source_observation_rejected")
     status = ("INVALID" if not valid or future or not latest_verified else
               "DEGRADED" if blockers or invalid or missing_volume or dedup["invalid_rows"]
-              or dedup["duplicate_dates"] else "MEDIUM")
+              or dedup["duplicate_dates"] or rejected
+              or acquisition.get("status") == "PARTIAL" else "MEDIUM")
     windows = {}
     # Retain the full-history audit. Current eligibility is evaluated on the
     # last source observations, before invalid bars are filtered out.
     for size in (22, 60, 250, 300):
         source_window = [r for r in canonical if r["source_date"] not in incomplete][-size:]
         dates = {r["source_date"] for r in source_window}
-        bad_dates = sorted(dates.intersection(invalid + missing_volume + future))
+        bad_dates = sorted(dates.intersection(invalid + missing_volume + future + conflicts))
         duplicate_dates = sorted(dates.intersection(dedup["duplicate_date_values"]))
         good = [r for r in valid if r["source_date"] in dates]
         window_status = ("INVALID" if not latest_verified or future or not good else
@@ -106,10 +129,12 @@ def market_gate(rows: list[dict[str, Any]], *, symbol: str, as_of: date | None =
                               "calendar_continuity": "UNVERIFIED"}
     # Without an independently verified adjustment history we cannot assert HIGH.
     serial = json.dumps([r["source_row_hash"] for r in valid], sort_keys=True).encode("utf-8")
+    last = valid[-1] if latest_verified else {}
     return {"status": status, "as_of": as_of.isoformat(), "source": "TSETMC",
             "symbol": symbol, "source_rows": len(rows), "dated_rows": len(canonical),
             "valid_ohlcv_rows": len(valid), "invalid_source_dates": dedup["invalid_rows"],
             "duplicate_dates": dedup["duplicate_date_values"],
+            "conflicting_duplicate_dates": conflicts,
             "invalid_ohlc_dates": invalid, "missing_volume_dates": missing_volume,
             "future_dates": future, "latest_source_date": source_last,
             "incomplete_session_dates": incomplete,
@@ -119,6 +144,19 @@ def market_gate(rows: list[dict[str, Any]], *, symbol: str, as_of: date | None =
             "corporate_action_adjustment": "UNVERIFIED", "blockers": blockers,
             "audit_status": status, "windows": windows,
             "current_window": windows["250"],
+            "acquisition": {"status": acquisition.get("status", "NOT_RECORDED"),
+                            "request_date": acquisition.get("request_date"),
+                            "error": acquisition.get("error"), "rejected": rejected,
+                            "unresolved_dates": unresolved,
+                            "unresolved_completed_dates": unresolved_completed},
+            "price_range_validation": {"status": "VERIFIED_OHLC_GEOMETRY" if last else "UNAVAILABLE",
+                                       "as_of": latest if last else None,
+                                       "observed_low": last.get("low"), "observed_high": last.get("high"),
+                                       "observed_close": last.get("close"),
+                                       "close_basis": last.get("close_basis"),
+                                       "observed_settlement": last.get("settlement_price"),
+                                       "exchange_daily_limits": "NOT_CHECKED",
+                                       "corporate_action_adjustment": "UNVERIFIED"},
             "valid_rows_sha256": hashlib.sha256(serial).hexdigest(),
             "point_in_time": True}
 

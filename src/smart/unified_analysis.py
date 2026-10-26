@@ -21,7 +21,7 @@ from .analysis_workers import run_blocking
 from .analysis_stages import StageRunner, _stage_status
 from zoneinfo import ZoneInfo
 
-VERSION = "SMART-ANALYSIS-2.9"
+VERSION = "SMART-ANALYSIS-2.10"
 ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 JOB_TIMEOUT_SECONDS = 1200
 STAGE_TIMEOUT_SECONDS = 180
@@ -255,15 +255,32 @@ async def _run_job(job: dict[str, Any]) -> None:
         return await tsetmc.daily_history(ins_code)
 
     history = await stage("historical_data", fetch_history)
+    acquisition = await stage("market_acquisition_audit", lambda: run_blocking(
+        HistoricalDataRepository().state, ins_code, "TSETMC"))
     quality_gate = await stage("data_quality_gate", lambda: run_blocking(
         market_gate, history or [], symbol=symbol,
         as_of=datetime.now(ZoneInfo("Asia/Tehran")).date(),
-        completed_before=datetime.now(ZoneInfo("Asia/Tehran")).date()))
-    canonical_history, _ = deduplicate_rows(history or [], symbol=symbol)
+        completed_before=datetime.now(ZoneInfo("Asia/Tehran")).date(),
+        acquisition=acquisition))
+    gate_failed = quality_gate is None
+    if gate_failed:
+        # Nothing is verified when the audit itself failed. Preserve source
+        # material in raw.json and continue independent financial collection.
+        quality_gate = {"status": "INVALID", "source": "TSETMC", "symbol": symbol,
+                        "as_of": datetime.now(ZoneInfo("Asia/Tehran")).date().isoformat(),
+                        "latest_valid_date": None, "latest_bar_verified": False,
+                        "freshness": "UNAVAILABLE", "valid_ohlcv_rows": 0,
+                        "blockers": ["quality_gate_execution_failed"],
+                        "current_window": {"status": "INVALID"},
+                        "corporate_action_adjustment": "UNVERIFIED", "point_in_time": False}
+    canonical_history, _ = deduplicate_rows(history or [], symbol=symbol, price_basis="last_trade")
     excluded_dates = set((quality_gate or {}).get("invalid_ohlc_dates", []) +
                          (quality_gate or {}).get("missing_volume_dates", []) +
                          (quality_gate or {}).get("future_dates", []) +
-                         (quality_gate or {}).get("incomplete_session_dates", []))
+                         (quality_gate or {}).get("incomplete_session_dates", []) +
+                         (quality_gate or {}).get("conflicting_duplicate_dates", []))
+    if gate_failed:
+        excluded_dates.update(r["source_date"] for r in canonical_history)
     analysis_history = [r for r in canonical_history if r["source_date"] not in excluded_dates]
     async def outcome_review():
         from .analysis_outcomes import record_forward_outcomes
@@ -455,8 +472,10 @@ async def _run_job(job: dict[str, Any]) -> None:
         last_close=(structure or {}).get("timeframes", {}).get("daily", {}).get("last_close")))
     structured = verified or {}
     quality = dict(structured.get("data_quality", {"status": "poor", "issues": ["market_unavailable"]}))
-    source_issues = [key for key in ("invalid_source_dates", "duplicate_dates", "invalid_ohlc_dates",
+    source_issues = [key for key in ("invalid_source_dates", "duplicate_dates", "conflicting_duplicate_dates", "invalid_ohlc_dates",
         "missing_volume_dates", "future_dates") if (quality_gate or {}).get(key)]
+    if (quality_gate.get("acquisition") or {}).get("rejected"):
+        source_issues.append("market_source_rows_rejected")
     quality["issues"] = list(dict.fromkeys([*quality.get("issues", []), *source_issues,
                                            *(quality_gate or {}).get("blockers", [])]))
     if (quality_gate or {}).get("blockers"):
@@ -602,6 +621,7 @@ async def _run_job(job: dict[str, Any]) -> None:
                "risk": summary["risk"], "research_cache": research_cache,
                "missing_data": missing, "warnings": job["warnings"]}
     raw = {"symbol_resolution": found, "market_analysis": row, "history": history,
+           "market_acquisition": acquisition,
            "dated_client_type": client_observation,
            "symbol_profile": profile, "regime_source_snapshot": (regime or {}).get("source_snapshot"),
            "verified_analysis_history": analysis_history, "excluded_dates": sorted(excluded_dates),
