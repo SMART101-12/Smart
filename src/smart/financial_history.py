@@ -166,6 +166,30 @@ class HistoricalDataRepository(SnapshotStore):
             return {r[0] for r in con.execute(
                 "SELECT document_id FROM financial_documents WHERE symbol=?", (normalize(symbol),))}
 
+    def codal_inventory(self, symbol, years=5):
+        """Inspect persisted evidence before deciding what needs remote discovery.
+
+        Missing years are relative to the newest local fiscal year; only Codal
+        discovery can establish whether a newer report has been published.
+        """
+        from .codal_parser import PARSER_VERSION
+        symbol = normalize(symbol)
+        reports = self.reports(symbol, selected=False) + self.reports(symbol, basis="consolidated", selected=False)
+        annual = sorted({int(r["period"][:4]) for r in reports
+                         if r["basis"] == "standalone" and r["report_type"] == "annual"})
+        expected = set(range(annual[-1] - years + 1, annual[-1] + 1)) if annual else set()
+        current = {r["document_id"] for r in reports if r.get("parser_version") == PARSER_VERSION}
+        monthly = self.monthly_sales(symbol, selected=False)
+        with self._connect() as con:
+            assets = con.execute("SELECT count(*),count(DISTINCT report_id) FROM codal_assets WHERE symbol=?", (symbol,)).fetchone()
+        return {"symbol": symbol, "financial_documents": len({r["document_id"] for r in reports}),
+                "current_financial_ids": sorted(current),
+                "monthly_ids": sorted({r["report_id"] for r in monthly}),
+                "raw_asset_versions": assets[0], "raw_asset_documents": assets[1],
+                "annual_years": annual, "missing_annual_years": sorted(expected - set(annual)),
+                "annual_window_complete": bool(annual) and len(expected) == years and expected <= set(annual),
+                "publication_check_required": True}
+
     def asset(self, symbol, report_id, url):
         with self._connect() as con:
             row = con.execute("SELECT payload,content_type,digest FROM codal_assets WHERE symbol=? AND report_id=? AND url=? ORDER BY retrieved_at DESC LIMIT 1",

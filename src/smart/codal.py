@@ -152,6 +152,7 @@ class CodalHistoricalProvider:
                                  headers={"User-Agent": "Mozilla/5.0 SMART"}) as direct:
                 return CodalHistoricalProvider(client, self.repository, direct).fetch(symbol, known_ids, publication_cursor, years)
         output, rejected, periods, excluded = [], [], set(), []
+        pending_changed = set(self.repository.state(symbol, "KODAL").get("pending_changed", [])) if self.repository else set()
         existing = self.repository.reports(symbol) if self.repository else []
         latest_year = max((int(r["period"][:4]) for r in existing
                            if r["report_type"] == "annual"), default=None)
@@ -201,6 +202,9 @@ class CodalHistoricalProvider:
                                          "reason": "outside_requested_financial_window"})
                         continue
                     discovered_years.add(fiscal_year)
+                if changed:
+                    pending_changed.add(docid)
+                changed = docid in pending_changed
                 if docid in downloaded and not changed:
                     continue
                 url = urljoin("https://www.codal.ir/", letter.get("Url", ""))
@@ -210,6 +214,7 @@ class CodalHistoricalProvider:
                     parsed = self.download_statements(letter, symbol, url, changed)
                     output.extend(parsed)
                     downloaded.add(docid)
+                    pending_changed.discard(docid)
                     for report, _ in parsed:
                         if report["basis"] == "standalone":
                             periods.add(report["period"])
@@ -225,6 +230,7 @@ class CodalHistoricalProvider:
         else:
             rejected.append({"error": "Codal pagination limit reached; discovery incomplete"})
         return {"reports": output, "rejected": rejected, "cursor": newest,
+                "pending_changed": sorted(pending_changed),
                 "excluded_documents": excluded,
                 "discovery_scope": {"latest_fiscal_year": latest_year,
                                     "minimum_fiscal_year": latest_year - years if latest_year else None,
@@ -245,6 +251,7 @@ class CodalHistoricalProvider:
             raise ValueError("Company sync requires a repository")
         if years < 5 or max_pages < 1 or max_pages > 100:
             raise ValueError("At least five years; pages must be 1..100")
+        inventory = repo.codal_inventory(symbol, years)
         if self.client is None:
             with httpx.Client(timeout=12, follow_redirects=False, headers={"User-Agent": "Mozilla/5.0 SMART"}) as client, \
                     httpx.Client(timeout=12, trust_env=False, follow_redirects=False,
@@ -252,22 +259,21 @@ class CodalHistoricalProvider:
                 return CodalHistoricalProvider(client, repo, direct).sync_company(symbol, years=years, max_pages=max_pages, force=force)
         state = repo.state(symbol, "KODAL_COMPANY")
         if not force and state.get("action_required") == "CODAL_USER_VERIFICATION":
-            return dict(state, reused_local=True)
+            return dict(state, reused_local=True, local_inventory=inventory)
         if (not force and state.get("parser_version") == PARSER_VERSION
                 and state.get("status") == "SUCCESS"
                 and repo.fresh(symbol, "KODAL_COMPANY", settings()["sync_ttl_seconds"])):
-            return dict(state, reused_local=True)
+            return dict(state, reused_local=True, local_inventory=inventory)
         current_parser = state.get("parser_version") == PARSER_VERSION
         cursor = state.get("cursor") if current_parser and state.get("status") == "SUCCESS" else None
         result = {"symbol": normalize(symbol), "source": "KODAL", "status": "SUCCESS",
+                  "local_inventory": inventory,
                   "parser_version": PARSER_VERSION,
                   "inserted": 0, "updated": 0, "skipped": 0, "discovered": 0,
                   "rejected": [], "pages": [], "cursor": cursor,
                   "last_sync_date": state.get("last_sync_date")}
-        known = repo.known_documents(symbol) | {r["report_id"] for r in repo.monthly_sales(symbol, selected=False)}
+        known = set(inventory["current_financial_ids"]) | set(inventory["monthly_ids"])
         pending_changed = set(state.get("pending_changed", []))
-        if not current_parser:
-            known = set()
         newest = cursor
         started = time.monotonic()
         verification_required = False
@@ -401,28 +407,19 @@ class HistoricalDataSyncManager:
             return self._sync_financial(symbol, force)
 
     def _cached_financial(self, symbol):
-        from datetime import datetime, timezone
         from .financial_history import settings
 
         config = settings()
         repo = self.repository
         state = repo.state(symbol, "KODAL")
+        inventory = repo.codal_inventory(symbol, config["years"])
         if state.get("parser_version") != PARSER_VERSION:
             return None
-        if repo.fresh(symbol, "KODAL", config["sync_ttl_seconds"]):
-            return dict(state, reused_local=True)
-        if state.get("status") not in {"PARTIAL", "SOURCE_UNAVAILABLE"}:
-            return None
-        try:
-            requested = datetime.fromisoformat(state["request_date"])
-            recent = (datetime.now(timezone.utc) - requested).total_seconds() < config["sync_ttl_seconds"]
-        except (KeyError, TypeError, ValueError):
-            return None
-        if not recent:
-            return None
-        years = {int(r["period"][:4]) for r in repo.reports(symbol)
-                 if r["report_type"] == "annual"}
-        return dict(state, reused_local=True) if len(years) >= config["years"] else None
+        if (state.get("status") == "SUCCESS" and not state.get("rejected")
+                and not state.get("pending_changed") and inventory["annual_window_complete"]
+                and repo.fresh(symbol, "KODAL", config["sync_ttl_seconds"])):
+            return dict(state, reused_local=True, local_inventory=inventory)
+        return None
 
     def sync_company(self, symbol, years=5, max_pages=100, force=False):
         with _sync_lock(str(self.repository.path.resolve()), normalize(symbol)):
@@ -442,7 +439,9 @@ class HistoricalDataSyncManager:
             if cached:
                 return cached
         state = repo.state(symbol, "KODAL")
+        inventory = repo.codal_inventory(symbol, config["years"])
         result = {"source": "KODAL", "symbol": symbol, "inserted": 0, "updated": 0,
+                  "local_inventory": inventory, "pending_changed": state.get("pending_changed", []),
                   "parser_version": PARSER_VERSION,
                   "skipped": 0, "rejected": [], "records_received": 0,
                   "cursor": state.get("cursor"), "status": "SUCCESS",
@@ -456,8 +455,9 @@ class HistoricalDataSyncManager:
             covered = len(fiscal_years) >= config["years"] and expected <= fiscal_years
             current_parser = state.get("parser_version") == PARSER_VERSION
             cursor = state.get("cursor") if current_parser and covered and not state.get("rejected") else None
-            known = repo.known_documents(symbol) if current_parser else set()
+            known = set(inventory["current_financial_ids"])
             batch = self.provider.fetch(symbol, known, cursor, config["years"])
+            result["pending_changed"] = batch.get("pending_changed", [])
             result["records_received"] = len(batch["reports"])
             result["rejected"] = list(batch["rejected"])
             result["excluded_documents"] = batch.get("excluded_documents", [])
@@ -466,6 +466,7 @@ class HistoricalDataSyncManager:
                 try:
                     result[repo.save_report(report, raw)] += 1
                 except (ValueError, KeyError, TypeError) as exc:
+                    result["pending_changed"] = sorted(set(result["pending_changed"]) | {report.get("document_id", "")})
                     result["rejected"].append({"document_id": report.get("document_id"), "error": str(exc)})
             if result["rejected"]:
                 result["status"] = "PARTIAL"

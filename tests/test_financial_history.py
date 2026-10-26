@@ -163,7 +163,7 @@ def test_source_down_uses_local_and_preserves_last_success(repo):
     assert len(repo.audit("TEST")) == 2
 
 
-def test_recent_partial_refresh_reuses_complete_local_years(repo, monkeypatch):
+def test_recent_partial_refresh_retries_discovery_without_redownloading_local_years(repo):
     provider = Provider([fixture_report(y) for y in range(1400, 1405)])
     manager = HistoricalDataSyncManager(repo, provider)
     manager.sync_financial("TEST")
@@ -173,10 +173,59 @@ def test_recent_partial_refresh_reuses_complete_local_years(repo, monkeypatch):
     provider.fetch = rate_limited
     partial = manager.sync_financial("TEST", force=True)
     assert partial["status"] == "PARTIAL"
-    monkeypatch.setattr("smart.codal._sync_lock", lambda *_: (_ for _ in ()).throw(
-        AssertionError("a cached report should never wait for a network sync lock")))
-    assert manager.sync_financial("TEST")["reused_local"] is True
-    assert len(repo.audit("TEST")) == 2
+    provider.fetch = Provider([fixture_report(y) for y in range(1400, 1405)]).fetch
+    retried = manager.sync_financial("TEST")
+    assert retried["status"] == "SUCCESS"
+    assert retried["records_received"] == 0
+    assert retried["local_inventory"]["financial_documents"] == 5
+    assert len(repo.audit("TEST")) == 3
+
+
+def test_successful_but_incomplete_window_checks_missing_years_again(repo):
+    provider = Provider([fixture_report(y) for y in (1400, 1401, 1403, 1404)])
+    manager = HistoricalDataSyncManager(repo, provider)
+    manager.sync_financial("TEST")
+    provider.reports.append(fixture_report(1402))
+    result = manager.sync_financial("TEST")
+    assert result["local_inventory"]["missing_annual_years"] == [1402]
+    assert result["inserted"] == 1
+    assert len(provider.calls[-1][0]) == 4
+    assert provider.calls[-1][1] is None
+
+
+def test_local_inventory_survives_restart_and_does_not_depend_on_sync_state(repo):
+    seed(repo)
+    reopened = HistoricalDataRepository(repo.path)
+    inventory = reopened.codal_inventory("TEST")
+    assert inventory["annual_window_complete"]
+    provider = Provider([fixture_report(y) for y in range(1400, 1405)])
+    result = HistoricalDataSyncManager(reopened, provider).sync_financial("TEST")
+    assert len(provider.calls[0][0]) == 5
+    assert result["records_received"] == 0
+
+
+def test_failed_annual_amendment_is_not_hidden_by_saved_metadata(repo):
+    report, raw = fixture_report()
+    letter = {"Symbol": "TEST", "TracingNo": report["document_id"],
+              "Title": report["source_title"], "PublishDateTime": report["source_date"],
+              "Url": "/Reports/fixture"}
+    stage = [0]
+    def handler(request):
+        if request.url.host == "search.codal.ir":
+            return httpx.Response(200, json={"Letters": [dict(letter, Revision=stage[0] > 0)], "TotalPages": 1})
+        if stage[0] == 1:
+            return httpx.Response(404)
+        return httpx.Response(200, text=raw)
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        manager = HistoricalDataSyncManager(repo, CodalHistoricalProvider(client, repo))
+        manager.sync_financial("TEST")
+        stage[0] = 1
+        failed = manager.sync_financial("TEST", force=True)
+        assert failed["pending_changed"] == [report["document_id"]]
+        stage[0] = 2
+        retried = manager.sync_financial("TEST")
+    assert retried["records_received"] == 1
+    assert retried["pending_changed"] == []
 
 
 def test_parser_rejects_ambiguous_column_and_preserves_comparatives():

@@ -59,6 +59,22 @@ def test_expired_cooldown_allows_a_new_request(tmp_path):
         assert CodalHistoricalProvider(client, repo).get("https://www.codal.ir/report").status_code == 200
 
 
+def test_raw_assets_are_reused_and_only_missing_urls_are_downloaded(tmp_path):
+    repo = HistoricalDataRepository(tmp_path / "raw.sqlite")
+    root = "https://www.codal.ir/Reports/example"
+    repo.save_asset("TEST", "doc", root, b"<html>stored evidence</html>", "text/html")
+    calls = []
+    def handler(request):
+        calls.append(str(request.url))
+        return httpx.Response(200, text="<html>missing sheet</html>")
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        provider = CodalHistoricalProvider(client, HistoricalDataRepository(repo.path))
+        assert provider.download("TEST", "doc", root) == "<html>stored evidence</html>"
+        provider.download("TEST", "doc", root + "?sheetId=9")
+        provider.download("TEST", "doc", root + "?sheetId=9")
+    assert calls == [root + "?sheetId=9"]
+
+
 def test_old_out_of_scope_layout_does_not_force_download_or_hide_its_exclusion():
     letters = [
         {"Symbol": "TEST", "Title": "صورتهای مالی 12 ماهه منتهی به 1404/12/29 حسابرسی شده",
