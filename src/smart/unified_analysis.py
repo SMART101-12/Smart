@@ -21,7 +21,7 @@ from .analysis_workers import run_blocking
 from .analysis_stages import StageRunner, _stage_status
 from zoneinfo import ZoneInfo
 
-VERSION = "SMART-ANALYSIS-2.7"
+VERSION = "SMART-ANALYSIS-2.8"
 ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 JOB_TIMEOUT_SECONDS = 1200
 STAGE_TIMEOUT_SECONDS = 180
@@ -400,7 +400,7 @@ async def _run_job(job: dict[str, Any]) -> None:
                     "plan": None, "conditional": None}
         if not history:
             raise ValueError("no historical bars")
-        recent = [asdict(bar) for bar in bars_from_rows(analysis_history)[-60:]]
+        recent = [asdict(bar) for bar in bars_from_rows(analysis_history)]
         return await run_blocking(conditional_levels, recent, symbol,
                                        model_decision=(self_test or {}).get("decision"),
                                        policy=TradePolicy(**configuration["trade_policy"]))

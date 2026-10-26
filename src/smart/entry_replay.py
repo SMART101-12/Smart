@@ -19,7 +19,7 @@ def replay_entry_plans(rows: list[dict[str, Any]], *, symbol: str,
     policy = policy or TradePolicy()
     engine = EntryExitEngine(policy)
     bars, audit = deduplicate_rows(rows, symbol=symbol)
-    result: dict[str, Any] = {"version": "ENTRY-REPLAY-1", "status": "INSUFFICIENT_DATA",
+    result: dict[str, Any] = {"version": "ENTRY-REPLAY-2", "status": "INSUFFICIENT_DATA",
         "symbol": symbol, "policy": policy.as_dict(), "trades": [], "pending": None,
         "validates_full_smart_decision": False, "model_approved": False,
         "execution_verified": False, "protocol": {
@@ -89,7 +89,7 @@ def replay_entry_plans(rows: list[dict[str, Any]], *, symbol: str,
                 active = None
         if active is None and i >= 21:
             # Only rows already visible at this decision; entry never at same close.
-            generated = engine.generate(bars[max(0, i - 59):i + 1], symbol)
+            generated = engine.generate(bars[:i + 1], symbol)
             pending = generated.plan
     result.update(status="COMPLETE", trades=trades, open_position=active,
                   pending=pending.as_dict() if pending else None,

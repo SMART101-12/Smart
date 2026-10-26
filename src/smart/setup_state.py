@@ -77,6 +77,7 @@ def assess_setup(levels: dict[str, Any] | None, *, gate: dict[str, Any] | None,
     zone = candidate.get("entry_zone") or candidate.get("entry_zone_if_confirmed")
     cost = entry * policy.cost_rate
     net_rr = (target1 - entry - cost) / (entry - stop + cost)
+    net_rr2 = (target2 - entry - cost) / (entry - stop + cost)
     atr = (levels.get("evidence") or {}).get("atr")
     risk_pct = round((entry - stop) / entry * 100, 3) if entry and stop and entry > stop > 0 else None
     reward1 = round((target1 - entry) / (entry - stop), 3) if risk_pct and target1 else None
@@ -128,6 +129,8 @@ def assess_setup(levels: dict[str, Any] | None, *, gate: dict[str, Any] | None,
             blocks.append("stop_distance_exceeds_policy")
         if net_rr + 1e-10 < policy.min_net_reward_risk:
             blocks.append("net_reward_risk_below_policy")
+        if net_rr2 + 1e-10 < policy.second_net_reward_risk:
+            blocks.append("second_net_reward_risk_below_policy")
         if levels.get("status") == "ready" and not blocks:
             state = "CONFIRMED"
         elif levels.get("status") == "ready":
@@ -143,7 +146,8 @@ def assess_setup(levels: dict[str, Any] | None, *, gate: dict[str, Any] | None,
             "hypothetical": candidate if state != "CONFIRMED" else None,
             "entry": entry, "stop": stop, "target_1": target1, "target_2": target2,
             "risk_pct": risk_pct, "reward_risk_1": reward1, "reward_risk_2": reward2,
-            "net_reward_risk_1": round(net_rr, 6), "exit_rules": policy.exit_rules(),
+            "net_reward_risk_1": round(net_rr, 6), "net_reward_risk_2": round(net_rr2, 6),
+            "exit_rules": policy.exit_rules(),
             "atr_pct": atr_pct, "risk": risk,
             "liquidity": "UNVERIFIED", "gap_execution_risk": "UNVERIFIED",
             "blockers": sorted(set(blocks))}

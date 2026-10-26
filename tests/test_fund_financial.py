@@ -50,14 +50,13 @@ def test_fund_evidence_does_not_use_equity_score():
     assert "verified_nav_per_unit" in result["missing_data"]
 
 
-def test_rejected_model_only_gets_hypothetical_levels():
+def test_rejected_unconfirmed_range_does_not_get_invented_levels():
     rows = [{"date": f"202601{i:02d}", "open": 100, "high": 102,
              "low": 98, "close": 100, "volume": 1000} for i in range(1, 26)]
     result = conditional_levels(rows, "TEST", model_decision="REJECT")
     assert result["status"] == "no_setup"
     assert result["signal_status"] == "NO_SETUP"
-    assert result["conditional"]["entry_zone_if_confirmed"][0] > 102
-    assert result["conditional"]["stop_if_entered"] < 102
+    assert result["conditional"] is None
 
 
 def test_zero_ohlc_suspended_rows_are_excluded_without_filling():
@@ -67,4 +66,5 @@ def test_zero_ohlc_suspended_rows_are_excluded_without_filling():
     result = conditional_levels(rows, "TEST", model_decision="REJECT")
     assert result["excluded_invalid_bars"] == 1
     assert result["signal_status"] == "NO_SETUP"
-    assert result["conditional"] is not None
+    assert result["conditional"] is None
+    assert result["evidence"]["resistance"] == 102

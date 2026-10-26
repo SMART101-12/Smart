@@ -41,7 +41,8 @@ def test_overhead_resistance_rejects_insufficient_net_reward() -> None:
     assert engine.build_plan("TEST", "1d", 99, 100, 96, "20260927", [105, 140]) is None
     plan = engine.build_plan("TEST", "1d", 99, 100, 96, "20260927", [120, 140])
     assert plan and plan.tp1 <= 120 and plan.tp2 <= 140
-    assert plan.net_risk_reward[0] == pytest.approx(2)
+    assert (plan.tp1, plan.tp2) == (120, 140)
+    assert plan.net_risk_reward[0] >= 2 and plan.net_risk_reward[1] >= 3
     assert plan.expires_on == "2026-10-04"
     assert plan.overhead_resistances == (120, 140)
     assert engine.build_plan("TEST", "1d", 99, 100, 80, "20260927") is None
@@ -70,9 +71,12 @@ def test_trend_pullback_requires_trend_reclaim_and_volume() -> None:
             for i in range(60)]
     rows[-2].update(open=105.05, high=105.35, low=104.85, close=105.15)
     rows[-1].update(open=105.15, low=105.05, high=105.85, close=105.65, volume=150)
+    rows[5]["high"], rows[11]["high"] = 115, 130
+    rows[-5]["low"] = 104.7
     result = EntryExitEngine().generate(rows, "TEST")
     assert result.status == "ready" and result.evidence["setup"] == "trend_pullback"
-    assert result.plan.net_risk_reward[0] == pytest.approx(2)
+    assert (result.plan.tp1, result.plan.tp2) == (115, 130)
+    assert result.plan.net_risk_reward[0] >= 2
     rows[-1]["volume"] = 100
     assert EntryExitEngine().generate(rows, "TEST").status == "no_setup"
 

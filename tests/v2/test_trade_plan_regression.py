@@ -12,7 +12,10 @@ def bars() -> list[dict]:
     rows = [{"date": str(date(2026, 1, 1) + timedelta(days=i)), "open": 99.,
              "high": 101., "low": 98., "close": 100., "volume": 100.} for i in range(22)]
     rows[-1].update(open=101., high=103., low=100., close=102., volume=160.)
-    return rows
+    older = [{"date": str(date(2025, 12, 22) + timedelta(days=i)), "open": 99.,
+              "high": 101., "low": 98., "close": 100., "volume": 100.} for i in range(10)]
+    older[2]["high"], older[6]["high"] = 140., 125.
+    return older + rows
 
 
 def test_breakout_requires_structure_atr_and_volume() -> None:
@@ -22,8 +25,9 @@ def test_breakout_requires_structure_atr_and_volume() -> None:
     p = result.plan
     assert p.sl < p.entry_zone[0] <= p.entry_zone[1] < p.tp1 < p.tp2
     cost = p.entry_zone[1] * .0035
-    assert (p.tp1 - p.entry_zone[1] - cost) / (p.entry_zone[1] - p.sl + cost) == pytest.approx(2)
-    assert p.net_risk_reward == pytest.approx((2, 3))
+    assert (p.tp1, p.tp2) == (125, 140)
+    assert (p.tp1 - p.entry_zone[1] - cost) / (p.entry_zone[1] - p.sl + cost) >= 2
+    assert p.net_risk_reward[0] >= 2 and p.net_risk_reward[1] >= 3
     assert result == engine.generate(list(reversed(bars())), "TEST")
     rows = bars()
     rows[-1]["volume"] = 100

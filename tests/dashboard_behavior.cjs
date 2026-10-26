@@ -23,8 +23,10 @@ chart.range('all');chart.zoom(10);if(chart.size!==250||chart.start!==0)throw Err
 chart.range(30);chart.zoom(.001);if(chart.size!==5)throw Error('Minimum zoom incorrect');
 if(fmt(3421.057143).includes('٫')||fmt(null)!=='—')throw Error('Numeric formatting incorrect');
 if(!displayText('ratio 1.2').includes('≈')||displayText('SMART-ANALYSIS-2.1')!=='SMART-ANALYSIS-2.1')throw Error('Text formatting incorrect');
-chart.setScenario({entry_exit:{conditional:{entry_zone_if_confirmed:[120,121.5],stop_if_entered:110,target_1_if_entered:135}}});
+chart.setScenario({entry_exit:{engine_version:'STRUCTURAL-ENTRY-1',conditional:{target_method:'observed_pivot_resistance',level_evidence:{target_1:{price:135},target_2:{price:145}},entry_zone_if_confirmed:[120,121.5],stop_if_entered:110,target_1_if_entered:135}}});
 if(chart.levels.length!==3||chart.levels[0][1]!==121.5)throw Error('Conditional level precision lost');
+chart.setScenario({entry_exit:{conditional:{entry_zone_if_confirmed:[120,121.5],stop_if_entered:110,target_1_if_entered:135}}});
+if(chart.levels.length!==0)throw Error('Legacy projected levels must not be presented as structural analysis');
 document.getElementById('chart-levels').onclick();document.getElementById('chart-mode').onclick();
 if(!chart.showLevels||chart.mode!=='candle')throw Error('Chart mode controls failed');
 `,sandbox);
@@ -32,9 +34,9 @@ assert.equal(nodes.get('chart-empty').textContent,'');
 console.log('Dashboard behavior passed: zoom, wheel, pan, keyboard, limits, formatting.');
 const calls=[];
 sandbox.fetch=async(url,options)=>{calls.push({url,method:options.method||'GET'});return {ok:true,json:async()=>url.endsWith('/chart')?{bars:[]}:{analysis_id:'fixture',requested_symbol:'TEST',status:'PARTIAL',as_of:'2026-09-27'}}};
-vm.runInContext("watchJob({analysis_id:'fixture',symbol:'TEST',status:'PARTIAL'})",sandbox).then(()=>{
+module.exports=vm.runInContext("watchJob({analysis_id:'fixture',symbol:'TEST',status:'PARTIAL'})",sandbox).then(()=>{
     assert.equal(calls.length,4);
     assert.ok(calls.every(call=>call.method==='GET'));
     assert.equal(nodes.get('resume-job').hidden,true);
     console.log('Saved job resume passed without starting another analysis.');
-}).catch(error=>{console.error(error);process.exitCode=1});
+});

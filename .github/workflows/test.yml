@@ -27,3 +27,4 @@ jobs:
           node-version: '22'
       - run: node tests/codal_reports_behavior.cjs
       - run: node tests/positions_behavior.cjs
+      - run: node tests/dashboard_behavior.cjs

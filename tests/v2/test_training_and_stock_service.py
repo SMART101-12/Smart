@@ -73,7 +73,8 @@ def test_non_trading_history_does_not_hide_verified_recent_levels():
     assert missing["pMax"] == 0  # Source values are never overwritten or filled.
     assert report["decision_support"]["atr"] > 0
     assert report["decision_support"]["entry_exit"]["status"] == "no_setup"
-    assert report["decision_support"]["conditional_levels"]["stop_if_entered"] > 0
+    assert report["decision_support"]["conditional_levels"] is None
+    assert report["decision_support"]["entry_exit"]["evidence"]["structural_levels"]
 
 
 def test_unverified_latest_bar_cannot_issue_stale_entry_levels():

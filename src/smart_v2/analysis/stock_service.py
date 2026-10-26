@@ -205,8 +205,8 @@ class StockAnalysisService:
         from smart.analysis_settings import load_analysis_configuration
         from .trade_policy import TradePolicy
         policy = TradePolicy(**load_analysis_configuration()["trade_policy"])
-        entry_exit = EntryExitEngine(policy).generate(canonical[-60:], symbol)
-        conditional = conditional_levels(canonical[-60:], symbol, model_decision=None, policy=policy)
+        entry_exit = EntryExitEngine(policy).generate(canonical, symbol)
+        conditional = conditional_levels(canonical, symbol, model_decision=None, policy=policy)
         if not audit["latest_bar_verified"]:
             from .trade_plan import TradePlanResult
             entry_exit = TradePlanResult("insufficient_data", "Latest source bar has no verified OHLCV")
