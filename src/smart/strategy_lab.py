@@ -16,6 +16,7 @@ from typing import Any, Iterable, Sequence
 
 import numpy as np
 
+from .analysis_workers import cancellation_checkpoint
 from .technical_analysis import Bar, Feature, build_features
 
 
@@ -417,6 +418,7 @@ def _train_strategy_scores(
         return stats
     # A label is eligible only when its target date precedes the decision date.
     for spec in specs:
+        cancellation_checkpoint()
         returns: list[float] = []
         wins = 0
         for index in range(start, stop):
@@ -450,13 +452,14 @@ def _build_signal_matrix(
     features: Sequence[Feature],
     context: _IndicatorContext,
 ) -> dict[str, Sequence[int]]:
-    return {
-        spec.strategy_id: [
+    matrix = {}
+    for spec in specs:
+        cancellation_checkpoint()
+        matrix[spec.strategy_id] = [
             _signal(spec, bars, features, index, context)
             for index in range(len(bars))
         ]
-        for spec in specs
-    }
+    return matrix
 
 
 def _build_prefix_stats(
@@ -493,6 +496,7 @@ def _build_prefix_stats(
 
     result: dict[str, dict[str, np.ndarray]] = {}
     for spec in specs:
+        cancellation_checkpoint()
         signals = np.asarray(signal_matrix[spec.strategy_id], dtype=float)
         valid = (signals != 0) & valid_future
         signed = np.where(valid, signals * future, 0.0)
@@ -517,6 +521,7 @@ def _posthoc_strategy_statistics(
 
     ranked: list[dict[str, Any]] = []
     for spec in specs:
+        cancellation_checkpoint()
         values = prefix_stats[spec.strategy_id]
         samples = int(values["samples"][stop] - values["samples"][start]) if stop > start else 0
         wins = int(values["wins"][stop] - values["wins"][start]) if stop > start else 0
@@ -556,6 +561,7 @@ def _ensemble_vote(
 
     current_signals = []
     for spec in specs:
+        cancellation_checkpoint()
         signal = (
             signal_matrix[spec.strategy_id][index]
             if signal_matrix is not None
@@ -864,6 +870,7 @@ def walk_forward_exam(
     start = initial_history
     stop = len(bars) if max_decisions <= 0 else min(len(bars), start + max_decisions)
     for index in range(start, stop):
+        cancellation_checkpoint()
         scores = _train_strategy_scores(
             specs,
             bars,

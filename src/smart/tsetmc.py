@@ -20,6 +20,7 @@ from urllib.parse import quote
 import httpx
 
 from .signals import smart_money_phase
+from .analysis_workers import run_blocking, cancellation_checkpoint
 from .analysis_contract import build_structured_analysis
 from .technical import ema, rsi, sma
 from .technical_analysis import build_features
@@ -225,10 +226,10 @@ async def historical_exam(symbol: str, *, initial_history: int = 20, evaluation_
     """Fetch the complete available history and run the offline exam."""
     found = await search_symbol(symbol)
     ins_code = str(found.get("insCode"))
-    _register_history_identity(symbol, ins_code)
+    await run_blocking(_register_history_identity, symbol, ins_code)
     history = await daily_history(ins_code, top=int(os.getenv("TSETMC_HISTORY_TOP", "0")))
-    exam = walk_forward_exam(
-        history,
+    exam = await run_blocking(
+        walk_forward_exam, history,
         symbol=symbol,
         initial_history=initial_history,
         evaluation_window=evaluation_window,
@@ -283,10 +284,10 @@ async def symbol_entry_profile(
         # Test and custom adapters from earlier SMART versions accept only the
         # instrument code.  Keep this public route backwards-compatible.
         history = await daily_history(ins_code)
-    profile = AITrainingService(
-        memory_root=os.getenv("SMART_LEARNING_ROOT", "runtime/learning")
-    ).train_symbol_entry_profile(
-        history,
+    trainer = AITrainingService(
+        memory_root=os.getenv("SMART_LEARNING_ROOT", "runtime/learning"))
+    profile = await run_blocking(
+        trainer.train_symbol_entry_profile, history,
         symbol=symbol,
         years=max(1, min(int(years), 15)),
         initial_history=max(10, min(int(initial_history), 500)),
@@ -353,7 +354,7 @@ async def focus_symbol_profiles(
 async def analyze_symbol(symbol: str) -> dict[str, Any]:
     found = await search_symbol(symbol)
     ins_code = str(found.get("insCode"))
-    _register_history_identity(symbol, ins_code)
+    await run_blocking(_register_history_identity, symbol, ins_code)
     info = await instrument_info(ins_code)
     current = await closing_info(ins_code)
     try:
@@ -362,6 +363,11 @@ async def analyze_symbol(symbol: str) -> dict[str, Any]:
         # Preserve compatibility with injected/test adapters accepting one arg.
         history = await daily_history(ins_code)
     flow = await client_type(ins_code)
+    return await run_blocking(
+        _complete_market_analysis, symbol, ins_code, info, current, history, flow)
+
+
+def _complete_market_analysis(symbol, ins_code, info, current, history, flow):
     result = _analyze_rows(symbol, info, current, history, flow)
     result["client_type_observation"] = {"date": flow.get("dEven"),
         "source": "TSETMC ClientType", "buy_individual_volume": _number(flow, "buy_I_Volume", "buyIVolume"),
@@ -415,6 +421,7 @@ async def analyze_symbol(symbol: str) -> dict[str, Any]:
     result["structured_analysis"] = build_structured_analysis(result)
     if isinstance(decision, dict):
         decision["structured_analysis"] = result["structured_analysis"]
+    cancellation_checkpoint()
     try:
         result["decision_record"] = DecisionMemory().record_decision(
             symbol,
@@ -452,25 +459,13 @@ async def live_initial_analysis(symbols: list[str]) -> dict[str, Any]:
         except Exception as exc:  # source adapter failures must be visible, not 500s
             errors.append({"symbol": symbol, "error": f"unexpected source failure: {exc}"})
 
-    from .financial_history import HistoricalDataRepository
-    from .financial_scoring import FinancialScoringEngine, integrate_financial_score
-    from .codal import HistoricalDataSyncManager
+    from .financial_enrichment import enrich_financial_history
     import asyncio
 
-    repository = HistoricalDataRepository()
     for row in results:
-        await asyncio.to_thread(HistoricalDataSyncManager(repository).sync_financial, row["symbol"])
-        financial = FinancialScoringEngine(repository).analyze(row["symbol"])
-        row["financial_history"] = financial
-        base_score = round(
-            row["smart_money"]["score"] * 0.4
-            + row["technical"]["score"] * 0.35
-            + row["data_quality"] * 0.25,
-            2,
-        ) if row["smart_money"]["score"] is not None and row["technical"]["score"] is not None else None
-        row["score_components"] = integrate_financial_score(base_score, financial)
-        row["overall_score"] = row["score_components"]["score"]
-        row["historical_market_sync"] = repository.state(str(row.get("ins_code", "")), "TSETMC")
+        enrichment, financial_errors = await asyncio.to_thread(enrich_financial_history, row)
+        row.update(enrichment)
+        errors.extend(financial_errors)
     results.sort(key=lambda row: (row["overall_score"] is not None, row["overall_score"] or 0), reverse=True)
     for rank, row in enumerate(results, start=1):
         row["rank"] = rank

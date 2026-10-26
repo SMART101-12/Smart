@@ -17,31 +17,27 @@ The research protocol is deliberately conservative:
 """
 from __future__ import annotations
 
-import json
 import math
-import uuid
 from collections import Counter
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from pathlib import Path
-from statistics import mean
 from typing import Any, Iterable, Sequence
 
-from .archive import safe_symbol
+from .analysis_workers import cancellation_checkpoint
 from .technical_analysis import Bar
+from .symbol_evaluation import (
+    MIN_VALIDATION_TRADES, MIN_TEST_TRADES, MIN_PROFIT_FACTOR, MAX_ACCEPTABLE_DRAWDOWN_PCT,
+    _round, _trade_metrics, _trades_in_range, _range_boundaries, _candidate_score,
+    _robustness_gate, _promotion,
+)
+from .symbol_profiles import _persist, load_latest_symbol_profile, summarize_profile
 
 
 FOCUS_SYMBOLS = ("فولاد", "پالایش", "فملی", "فجر")
 TIMEFRAMES = ("daily", "weekly", "monthly", "yearly")
 INDICATORS = ("ichimoku", "macd", "rsi", "ema", "sma")
 ENGINE_VERSION = "symbol-adaptive-entry-v3"
-
-# A candidate needs enough independent, after-cost evidence before it can be
-# treated as a research hypothesis or a paper-monitoring candidate.
-MIN_VALIDATION_TRADES = 5
-MIN_TEST_TRADES = 5
-MIN_PROFIT_FACTOR = 1.0
-MAX_ACCEPTABLE_DRAWDOWN_PCT = -35.0
 
 
 @dataclass(frozen=True)
@@ -384,6 +380,7 @@ def _indicator_states(bars: Sequence[Bar], timeframe: str) -> list[IndicatorStat
 def _build_context(bars: Sequence[Bar]) -> dict[str, TimeframeData]:
     context: dict[str, TimeframeData] = {}
     for timeframe in TIMEFRAMES:
+        cancellation_checkpoint()
         aggregated, mapping = _aggregate_timeframe(bars, timeframe)
         context[timeframe] = TimeframeData(
             bars=tuple(aggregated),
@@ -395,10 +392,6 @@ def _build_context(bars: Sequence[Bar]) -> dict[str, TimeframeData]:
 
 def _clamp(value: float, lower: float, upper: float) -> float:
     return max(lower, min(upper, value))
-
-
-def _round(value: float | None, digits: int = 6) -> float | None:
-    return round(float(value), digits) if value is not None and math.isfinite(value) else None
 
 
 def _state_values(state: IndicatorState) -> dict[str, Any]:
@@ -795,112 +788,6 @@ def _update_weights(
     }
 
 
-def _trade_metrics(trades: Sequence[dict[str, Any]]) -> dict[str, Any]:
-    returns = [float(item["net_return_pct"]) / 100.0 for item in trades]
-    wins = [value for value in returns if value > 0]
-    losses = [value for value in returns if value < 0]
-    equity, peak, maximum_drawdown = 1.0, 1.0, 0.0
-    for value in returns:
-        equity *= 1.0 + value
-        peak = max(peak, equity)
-        if peak:
-            maximum_drawdown = min(maximum_drawdown, equity / peak - 1.0)
-    profit_factor = sum(wins) / abs(sum(losses)) if losses else (None if not wins else float("inf"))
-    return {
-        "trades": len(trades),
-        "wins": len(wins),
-        "losses": len(losses),
-        "flats": len(returns) - len(wins) - len(losses),
-        "win_rate_pct": _round(len(wins) / len(returns) * 100.0, 4) if returns else None,
-        "mean_net_return_pct": _round(mean(returns) * 100.0, 6) if returns else None,
-        "cumulative_return_pct": _round((equity - 1.0) * 100.0, 6),
-        "max_drawdown_pct": _round(maximum_drawdown * 100.0, 6),
-        "profit_factor": _round(profit_factor, 6) if profit_factor is not None and math.isfinite(profit_factor) else ("infinite" if profit_factor else None),
-        "expectancy_pct": _round(mean(returns) * 100.0, 6) if returns else None,
-    }
-
-
-def _trades_in_range(trades: Sequence[dict[str, Any]], start: int, stop: int) -> list[dict[str, Any]]:
-    return [
-        item for item in trades
-        # A validation trade that closes in the frozen test period has no
-        # known validation outcome and must not influence candidate selection.
-        if start <= int(item.get("decision_index", -1)) < stop
-        and int(item.get("exit_index", stop)) < stop
-    ]
-
-
-def _range_boundaries(bar_count: int, initial_history: int) -> dict[str, int]:
-    start = max(10, min(int(initial_history), max(10, bar_count - 1)))
-    decisions = max(0, bar_count - start - 1)
-    train_end = min(bar_count - 1, start + max(1, int(decisions * 0.60)))
-    validation_end = min(bar_count - 1, train_end + max(1, int(decisions * 0.20)))
-    return {"start": start, "train_end": train_end, "validation_end": validation_end, "end": bar_count - 1}
-
-
-def _candidate_score(metrics: dict[str, Any]) -> float:
-    """Rank validation candidates without looking at frozen test results.
-
-    This score only resolves the order among candidates. A separate fixed gate
-    below decides whether the validation evidence is sufficient at all.
-    """
-
-    trades = int(metrics.get("trades") or 0)
-    if trades < MIN_VALIDATION_TRADES:
-        # Do not let one or two lucky entries outrank an evidence-backed model.
-        return -100000.0 + trades
-    cumulative = float(metrics.get("cumulative_return_pct") or 0.0)
-    drawdown = abs(float(metrics.get("max_drawdown_pct") or 0.0))
-    win_rate = float(metrics.get("win_rate_pct") or 0.0)
-    factor_value = metrics.get("profit_factor")
-    factor = 0.0 if factor_value in (None, "infinite") else min(3.0, float(factor_value))
-    return cumulative - 0.75 * drawdown + 0.04 * win_rate + 1.5 * factor
-
-
-def _robustness_gate(
-    metrics: dict[str, Any],
-    *,
-    phase: str,
-    minimum_trades: int,
-) -> dict[str, Any]:
-    """Return fixed, auditable after-cost quality checks for one data range."""
-
-    trades = int(metrics.get("trades") or 0)
-    cumulative_return = float(metrics.get("cumulative_return_pct") or 0.0)
-    max_drawdown = float(metrics.get("max_drawdown_pct") or 0.0)
-    raw_factor = metrics.get("profit_factor")
-    profit_factor_ok = raw_factor == "infinite" or (
-        isinstance(raw_factor, (int, float))
-        and math.isfinite(float(raw_factor))
-        and float(raw_factor) > MIN_PROFIT_FACTOR
-    )
-    checks = {
-        "minimum_trade_count": trades >= minimum_trades,
-        "positive_cumulative_return_after_costs": cumulative_return > 0.0,
-        "profit_factor_above_one": profit_factor_ok,
-        "controlled_max_drawdown": max_drawdown >= MAX_ACCEPTABLE_DRAWDOWN_PCT,
-    }
-    failed_checks = [name for name, passed in checks.items() if not passed]
-    return {
-        "phase": phase,
-        "passed": not failed_checks,
-        "thresholds": {
-            "minimum_trades": minimum_trades,
-            "minimum_profit_factor_exclusive": MIN_PROFIT_FACTOR,
-            "minimum_cumulative_return_pct_exclusive": 0.0,
-            "maximum_drawdown_pct": MAX_ACCEPTABLE_DRAWDOWN_PCT,
-        },
-        "observed": {
-            "trades": trades,
-            "cumulative_return_pct": _round(cumulative_return, 6),
-            "profit_factor": raw_factor,
-            "max_drawdown_pct": _round(max_drawdown, 6),
-        },
-        "checks": checks,
-        "failed_checks": failed_checks,
-    }
-
-
 def _configs() -> tuple[EntryConfig, ...]:
     """Bounded improvement search; round 2 is stricter after baseline errors."""
 
@@ -940,6 +827,7 @@ def _simulate(
     latest_reason = "indicator_warmup"
 
     for index in range(start, len(bars)):
+        cancellation_checkpoint()
         if active is not None:
             settled = _settle_trade(active, bars, index, transaction_cost_pct / 100.0)
             if settled is None:
@@ -1105,101 +993,6 @@ def _apply_evidence_to_current_entry(
     return current
 
 
-def _promotion(selected: dict[str, Any]) -> dict[str, Any]:
-    """Permit paper monitoring only when validation and test pass fixed gates."""
-
-    metrics = selected.get("range_metrics") or {}
-    validation_gate = selected.get("validation_gate") or _robustness_gate(
-        metrics.get("validation") or {},
-        phase="validation",
-        minimum_trades=MIN_VALIDATION_TRADES,
-    )
-    test_gate = selected.get("test_gate") or _robustness_gate(
-        metrics.get("test") or {},
-        phase="test",
-        minimum_trades=MIN_TEST_TRADES,
-    )
-    if validation_gate["passed"] and test_gate["passed"]:
-        return {
-            "decision": "PAPER_WATCH_CANDIDATE",
-            "reason": "Validation-selected candidate remained positive on the untouched test range; paper monitoring is still required.",
-            "validation_gate": validation_gate,
-            "test_gate": test_gate,
-        }
-    failed = []
-    if not validation_gate["passed"]:
-        failed.append("validation: " + ", ".join(validation_gate["failed_checks"]))
-    if not test_gate["passed"]:
-        failed.append("test: " + ", ".join(test_gate["failed_checks"]))
-    return {
-        "decision": "RESEARCH_ONLY",
-        "reason": (
-            "The candidate lacks sufficient after-cost evidence in a required chronological range "
-            f"({'; '.join(failed)}); do not treat it as a trading instruction."
-        ),
-        "validation_gate": validation_gate,
-        "test_gate": test_gate,
-    }
-
-
-def _persist(profile: dict[str, Any], root: str | Path) -> dict[str, Any]:
-    symbol = str(profile.get("symbol") or "UNKNOWN")
-    directory = Path(root) / safe_symbol(symbol) / "symbol_profiles"
-    directory.mkdir(parents=True, exist_ok=True)
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ") + "-" + uuid.uuid4().hex[:8]
-    artifact = directory / f"{run_id}.json"
-    latest = directory / "latest.json"
-    profile["artifact_path"] = str(artifact)
-    profile["latest_artifact_path"] = str(latest)
-    encoded = json.dumps(profile, ensure_ascii=False, indent=2)
-    artifact.write_text(encoded, encoding="utf-8")
-    latest.write_text(encoded, encoding="utf-8")
-    return profile
-
-
-def load_latest_symbol_profile(symbol: str, root: str | Path = "runtime/learning") -> dict[str, Any] | None:
-    path = Path(root) / safe_symbol(symbol) / "symbol_profiles" / "latest.json"
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    return payload if isinstance(payload, dict) else None
-
-
-def summarize_profile(profile: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Return a small dashboard/ChatGPT-safe view without the full trade trace."""
-
-    if not isinstance(profile, dict):
-        return None
-    selected = profile.get("selected_model") or {}
-    return {
-        "status": profile.get("status"),
-        "engine_version": profile.get("engine_version"),
-        "symbol": profile.get("symbol"),
-        "coverage": profile.get("coverage"),
-        "protocol": profile.get("protocol"),
-        "selected_model": {
-            "config": selected.get("config"),
-            "validation_metrics": (selected.get("range_metrics") or {}).get("validation"),
-            "test_metrics": (selected.get("range_metrics") or {}).get("test"),
-            "selection_score": selected.get("selection_score"),
-            "selection_status": selected.get("selection_status"),
-            "validation_gate": selected.get("validation_gate"),
-            "test_gate": selected.get("test_gate"),
-        },
-        "current_entry": profile.get("current_entry"),
-        "indicator_weights": profile.get("indicator_weights"),
-        "promotion": profile.get("promotion"),
-        "walk_forward": profile.get("walk_forward"),
-        "failure_diagnostics": {
-            key: value
-            for key, value in (profile.get("failure_diagnostics") or {}).items()
-            if key not in {"loss_examples", "win_examples"}
-        },
-        "artifact_path": profile.get("artifact_path"),
-    }
-
-
 def walk_forward_entry_simulation(
     rows: Iterable[dict[str, Any]],
     *,
@@ -1287,6 +1080,7 @@ def build_symbol_profile(
     ]
     reports: list[dict[str, Any]] = []
     for simulation in simulations:
+        cancellation_checkpoint()
         trades = simulation["trades"]
         range_metrics = {
             "train": _trade_metrics(_trades_in_range(trades, bounds["start"], bounds["train_end"])),

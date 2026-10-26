@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .analysis_workers import cancellation_checkpoint
 from .archive import deduplicate_rows
 from .risk import bar_exit
 from smart_v2.analysis.trade_plan import EntryExitEngine, TradePlan
@@ -44,6 +45,7 @@ def replay_entry_plans(rows: list[dict[str, Any]], *, symbol: str,
     trades: list[dict[str, Any]] = []
     rejected_entries = 0
     for i, candle in enumerate(bars):
+        cancellation_checkpoint()
         if active is None and pending is not None:
             if (candle["source_date"] <= pending.expires_on and
                     pending.entry_zone[0] <= candle["open"] <= pending.entry_zone[1]):
