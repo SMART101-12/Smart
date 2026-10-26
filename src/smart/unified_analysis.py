@@ -21,7 +21,7 @@ from .analysis_workers import run_blocking
 from .analysis_stages import StageRunner, _stage_status
 from zoneinfo import ZoneInfo
 
-VERSION = "SMART-ANALYSIS-2.10"
+VERSION = "SMART-ANALYSIS-2.11"
 ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 JOB_TIMEOUT_SECONDS = 1200
 STAGE_TIMEOUT_SECONDS = 180

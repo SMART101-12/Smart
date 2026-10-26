@@ -9,5 +9,6 @@ HTML = '''<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><
 <section><div class="section-title"><h2>کیفیت و سلامت منابع</h2><span class="muted">وضعیت ثبت‌شده در همین گزارش</span></div><div id="source-health" class="layer-grid empty">با بارگذاری گزارش، تاریخ داده و محدودیت هر منبع مشخص می‌شود.</div></section>
 <section><div class="section-title"><h2>لایه‌های تحلیل جامع</h2><span class="muted">هر کارت را برای جزئیات باز کنید</span></div><div id="analysis-layers" class="layer-grid empty">بازار، صنعت، تکنیکال، بنیادی، جریان پول، الگوی ورود، اعتبارسنجی و ریسک</div></section>
 <section><div class="section-title"><h2>۱۰ روش مستقل تحلیل بازار</h2><span class="badge">دیدگاه‌های مکمل</span></div><div id="market-models" class="empty">دیدگاه هر روش پس از بارگذاری گزارش نمایش داده می‌شود.</div></section>
+<section><div class="section-title"><h2>ورود و خروج پول حقیقی و حقوقی</h2></div><div id="money-flow" class="empty"></div></section>
 <section><div class="section-title"><h2>تاریخچه و مقایسه تحلیل‌ها</h2><span id="history-symbol" class="muted"></span></div><div id="analysis-history" class="empty">تاریخچه نماد پس از بارگذاری نمایش داده می‌شود.</div></section>
 </main><footer>اعداد نمایشی بدون اعشار هستند؛ محاسبات با دقت اصلی حفظ می‌شوند.</footer><script src="/dashboard.js" defer></script></body></html>'''

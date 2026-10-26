@@ -80,6 +80,22 @@ def explanation_facts(reference: dict[str, Any]) -> dict[str, str]:
             + "؛ نتیجه دادهٔ حقیقی و حقوقی " + shown((flow.get("observed_client_type") or {}).get("signal"))
             + "؛ نتیجهٔ الگوی قیمت و حجم " + shown((flow.get("price_volume_proxy") or {}).get("signal"))
             + ". الگوی قیمت و حجم به‌تنهایی تأیید ورود پول حقیقی نیست.")
+    money = flow.get("money_flow") or {}
+    if money.get("latest"):
+        latest = money["latest"]
+        actual = latest.get("net_individual_value")
+        facts["money_flow_observed"] = ("خالص ارزش واقعی معاملات حقیقی: " + shown(actual)
+            + " ریال؛ خالص حقوقی: " + shown(latest.get("net_corporate_value"))
+            + " ریال؛ قدرت خریدار بر مبنای ارزش واقعی: " + shown(latest.get("individual_value_buy_power")) + ".")
+        facts["money_flow"] = ("تغییر مالکیت حقیقی در " + shown(latest.get("date"))
+            + ": خالص حجم " + shown(latest.get("net_individual_volume")) + " سهم؛ مبلغ برآوردی "
+            + shown(latest.get("net_individual_value_estimate")) + " ریال؛ قدرت خریدار بر مبنای حجم "
+            + shown(latest.get("individual_buy_power")) + ". " + money["interpretation"]
+            + " " + money.get("price_flow_context", ""))
+        for window, values in money.get("windows", {}).items():
+            facts["money_flow_" + window] = ("جریان حقیقی در " + window + " جلسه: پوشش "
+                + shown(values.get("available")) + " جلسه؛ وضعیت " + shown(values.get("status"))
+                + "؛ خالص مبلغ برآوردی " + shown(values.get("net_individual_value_estimate")) + " ریال.")
     failed_gates = decision.get("failed_gates") or []
     if failed_gates:
         facts["decision_gates"] = "جمع‌بندی به این شروط تأییدنشده وابسته است: " + "، ".join(failed_gates) + "."

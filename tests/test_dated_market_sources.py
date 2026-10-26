@@ -14,12 +14,16 @@ def test_client_type_is_exactly_price_dated_and_cached(tmp_path):
         return {"clientType": [
             {"insCode": "123", "recDate": 20260928, "buy_I_Volume": 999, "sell_I_Volume": 1},
             {"insCode": "123", "recDate": 20260927, "buy_I_Volume": 40.5, "sell_I_Volume": 60.5,
-             "buy_I_Count": 5, "sell_I_Count": 10, "buy_N_Volume": 60.5, "sell_N_Volume": 40.5}]}
+             "buy_I_Count": 5, "sell_I_Count": 10, "buy_N_Volume": 60.5, "sell_N_Volume": 40.5,
+             "buy_I_Value": 4050, "sell_I_Value": 6050, "buy_N_Value": 6050, "sell_N_Value": 4050}]}
     kwargs = {"ins_code": "123", "price_date": "2026-09-27", "as_of": date(2026, 9, 28),
               "getter": get, "cache_root": tmp_path}
     observation = asyncio.run(fetch_client_type_evidence(**kwargs))
     assert observation["date"] == "2026-09-27" and observation["buy_individual_volume"] == 40.5
     assert observation["buy_individual_count"] == 5
+    assert observation["buy_individual_value"] == 4050
+    assert observation["history"][0]["sell_corporate_value"] == 4050
+    assert len(observation["history"]) == 1  # newer than the price session is excluded
     assert asyncio.run(fetch_client_type_evidence(**kwargs)) == observation
     assert len(calls) == 1
 

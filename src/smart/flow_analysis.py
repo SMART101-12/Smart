@@ -50,7 +50,17 @@ def analyze_flow(history: list[dict[str, Any]], *, symbol: str, as_of: date,
                     "individual_buy_power": round(power, 3) if power is not None else None,
                     "source": observation["source"], "source_sha256": observation.get("source_sha256"),
                     "ins_code": observation.get("ins_code")}
+    from .money_flow import analyze_money_flow
+    money = analyze_money_flow(rows, observation)
+    latest_money = money.get("latest") or {}
+    actual_net = latest_money.get("net_individual_value")
+    if observed["status"] == "SUCCESS" and actual_net is not None:
+        observed["signal"] = "BULLISH" if actual_net > 0 else "BEARISH" if actual_net < 0 else "NEUTRAL"
+        observed["signal_basis"] = "observed_net_trade_value"
     conflicts = []
+    if any(issue["reason"] == "client_value_totals_mismatch" for issue in money["issues"]
+           if issue["date"] == observed.get("as_of")):
+        conflicts.append("client_type_value_totals_mismatch")
     corporate = [observation.get(k) for k in ("buy_corporate_volume", "sell_corporate_volume")]
     if observed["status"] == "SUCCESS" and "buy_corporate_volume" in observation and not all(
             type(v) in (int, float) and isfinite(v) and v >= 0 for v in corporate):
@@ -73,9 +83,12 @@ def analyze_flow(history: list[dict[str, Any]], *, symbol: str, as_of: date,
             conflicts.append("falling_price_volume_with_individual_inflow")
         if observed["as_of"] != proxy["as_of"]:
             conflicts.append("client_type_and_price_sessions_differ")
+    if observed["status"] == "SUCCESS" and rows and observed["as_of"] != rows[-1]["source_date"]:
+        if "client_type_and_price_sessions_differ" not in conflicts:
+            conflicts.append("client_type_and_price_sessions_differ")
     return {"status": "CONFLICTING" if conflicts else
             "SUCCESS" if observed["status"] == "SUCCESS" else
             "PARTIAL" if proxy["status"] == "SUCCESS" else "UNAVAILABLE",
             "signal": "CONFLICTING" if conflicts else observed["signal"],
             "observed_client_type": observed, "price_volume_proxy": proxy,
-            "conflicts": conflicts}
+            "money_flow": money, "conflicts": conflicts}
