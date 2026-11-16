@@ -1,0 +1,57 @@
+{
+  "source": "TSETMC",
+  "received_at_utc": "2026-11-16T19:36:13.555633+00:00",
+  "batch": "20261116T193613Z",
+  "symbols": [
+    {
+      "symbol": "شپنا",
+      "ins_code": "7745894403636165",
+      "status": "ok"
+    },
+    {
+      "symbol": "شبندر",
+      "ins_code": "35366681030756042",
+      "status": "ok"
+    },
+    {
+      "symbol": "شتران",
+      "ins_code": "51617145873056483",
+      "status": "ok"
+    },
+    {
+      "symbol": "فارس",
+      "ins_code": "25244329144808274",
+      "status": "ok"
+    },
+    {
+      "symbol": "شستا",
+      "ins_code": "2400322364771558",
+      "status": "ok"
+    },
+    {
+      "symbol": "فولاد",
+      "ins_code": "46348559193224090",
+      "status": "ok"
+    },
+    {
+      "symbol": "فملی",
+      "ins_code": "35425587644337450",
+      "status": "ok"
+    },
+    {
+      "symbol": "کگل",
+      "ins_code": "35700344742885862",
+      "status": "ok"
+    },
+    {
+      "symbol": "کچاد",
+      "ins_code": "18027801615184692",
+      "status": "ok"
+    },
+    {
+      "symbol": "عیار",
+      "ins_code": "34144395039913458",
+      "status": "ok"
+    }
+  ]
+}
